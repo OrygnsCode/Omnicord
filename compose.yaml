@@ -1,0 +1,13 @@
+# Example deployment. Set DISCORD_TOKEN and OMNICORD_HTTP_TOKEN in the
+# shell or an env file before bringing it up; the container refuses to
+# start without the HTTP token because it binds beyond loopback.
+services:
+  omnicord:
+    build: .
+    ports:
+      - "3414:3414"
+    environment:
+      DISCORD_TOKEN: ${DISCORD_TOKEN}
+      OMNICORD_GUILD: ${OMNICORD_GUILD:-}
+      OMNICORD_HTTP_TOKEN: ${OMNICORD_HTTP_TOKEN}
+    restart: unless-stopped

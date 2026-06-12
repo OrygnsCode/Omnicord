@@ -1,0 +1,16 @@
+node_modules
+dist
+.git
+.claude
+.mcp.json
+.env
+.env.*
+.demo-build.json
+*.md
+docs
+examples
+scripts
+.gitignore
+.dockerignore
+Dockerfile
+compose.yaml

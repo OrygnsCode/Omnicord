@@ -1,0 +1,64 @@
+# Build and test on every push and pull request. This runs the same
+# suite that gates local commits: compile, pure-logic unit tests, a full
+# stdio protocol session, and the HTTP transport with its security
+# gates. None of it needs a Discord token; the live acceptance suite
+# stays out of CI on purpose because it requires a real test server.
+#
+# Ubuntu covers Node 20 (the minimum supported), 22, and 24 (current
+# LTS). One Windows leg and one macOS leg cover the platform-specific
+# paths: the wizard's client config detection, file handling, and
+# process spawning behave differently enough there to be worth the
+# runners.
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Node ${{ matrix.node }} on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest]
+        node: [20, 22, 24]
+        include:
+          - os: windows-latest
+            node: 24
+          - os: macos-latest
+            node: 24
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+
+      - name: Unit tests
+        run: node scripts/unit.mjs
+
+      - name: Protocol smoke test
+        run: node scripts/smoke.mjs
+
+      - name: HTTP transport smoke test
+        run: node scripts/smoke-http.mjs

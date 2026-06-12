@@ -1,0 +1,82 @@
+{
+  "name": "obsidian-covenant",
+  "theme": "Dark fantasy roleplay guild. IC and OOC separated; RP realms gated behind the Knight rank per RP community convention; lore and laws read-only; a low-commitment tavern RP channel for newcomers.",
+  "roles": [
+    { "name": "Guildmaster", "preset": "moderator", "color": "#7f1d1d", "hoist": true },
+    { "name": "Warden", "preset": "moderator", "color": "#c2410c", "hoist": true },
+    { "name": "Lorekeeper", "preset": "member", "color": "#7c3aed", "mentionable": true },
+    { "name": "Knight", "preset": "member", "color": "#cbd5e1", "hoist": true },
+    { "name": "Initiate", "preset": "member", "color": "#57534e" }
+  ],
+  "categories": [
+    {
+      "name": "The Gates",
+      "channels": [
+        {
+          "name": "herald-board",
+          "read_only": true,
+          "posting_roles": ["Guildmaster", "Warden"],
+          "topic": "Proclamations from the Covenant. Events, judgments, tidings."
+        },
+        {
+          "name": "codex-of-laws",
+          "read_only": true,
+          "posting_roles": ["Guildmaster"],
+          "topic": "The laws of the guild. Ignorance is no defense."
+        },
+        {
+          "name": "tomes-of-lore",
+          "read_only": true,
+          "posting_roles": ["Lorekeeper", "Guildmaster"],
+          "topic": "The world, its history, its horrors. Penned by the Lorekeepers."
+        },
+        {
+          "name": "hall-of-records",
+          "topic": "Post your character: name, lineage, deeds, doom. One soul per entry."
+        }
+      ]
+    },
+    {
+      "name": "The Great Hall",
+      "channels": [
+        { "name": "tavern-talk", "topic": "Out of character. Speak freely, traveler." },
+        { "name": "bardic-circle", "topic": "Art, song, and verse. Share your craft." },
+        {
+          "name": "merchants-row",
+          "topic": "Wares, trades, and promotions. The Wardens watch for swindlers.",
+          "slowmode_seconds": 30
+        },
+        { "name": "quest-board", "topic": "Seek companions. Plot your threads. Post your hooks." }
+      ]
+    },
+    {
+      "name": "The Realms",
+      "private_to": ["Knight", "Lorekeeper", "Warden", "Guildmaster"],
+      "channels": [
+        {
+          "name": "crossroads-inn",
+          "topic": "Drop-in roleplay. No application, no homework. Walk in and begin."
+        },
+        { "name": "the-shadowfen", "topic": "A drowned forest where the dead whisper. Long-form RP." },
+        { "name": "ashen-wastes", "topic": "What remains after the Sundering. Long-form RP." },
+        { "name": "citadel-of-glass", "topic": "Seat of the old empire. Intrigue RP. Mind your tongue." }
+      ]
+    },
+    {
+      "name": "The War Council",
+      "private_to": ["Guildmaster", "Warden"],
+      "channels": [
+        { "name": "council-chamber", "topic": "Staff coordination." },
+        { "name": "wardens-log", "topic": "Actions taken and why. Write it down." }
+      ]
+    },
+    {
+      "name": "Echoing Halls",
+      "channels": [
+        { "name": "The Hearth", "type": "voice" },
+        { "name": "Campfire Tales", "type": "voice" },
+        { "name": "War Room", "type": "voice", "private_to": ["Guildmaster", "Warden"] }
+      ]
+    }
+  ]
+}

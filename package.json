@@ -1,0 +1,59 @@
+{
+  "name": "@orygn/omnicord",
+  "version": "1.0.0",
+  "description": "Omnicord: an MCP server for Discord. Chat, moderate, administrate, and build out entire servers through any MCP client.",
+  "type": "module",
+  "license": "Elastic-2.0",
+  "author": "Orygn LLC",
+  "homepage": "https://github.com/OrygnsCode/Omnicord#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/OrygnsCode/Omnicord.git"
+  },
+  "bugs": {
+    "url": "https://github.com/OrygnsCode/Omnicord/issues"
+  },
+  "keywords": [
+    "discord",
+    "mcp",
+    "model-context-protocol",
+    "mcp-server",
+    "discord-bot",
+    "ai",
+    "claude",
+    "server-builder"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "bin": {
+    "omnicord": "dist/index.js"
+  },
+  "main": "dist/index.js",
+  "files": [
+    "dist"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsx src/index.ts",
+    "smoke": "npm run build && node scripts/smoke.mjs && node scripts/smoke-http.mjs",
+    "test": "npm run build && node scripts/unit.mjs && node scripts/smoke.mjs && node scripts/smoke-http.mjs",
+    "prepublishOnly": "npm test"
+  },
+  "dependencies": {
+    "@discordjs/rest": "^2.6.1",
+    "@discordjs/ws": "^2.0.4",
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "discord-api-types": "^0.38.48",
+    "dotenv": "^17.2.1",
+    "zod": "^3.25.76"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "tsx": "^4.20.0",
+    "typescript": "^5.9.0"
+  }
+}

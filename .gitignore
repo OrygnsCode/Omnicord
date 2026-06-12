@@ -1,0 +1,12 @@
+node_modules/
+dist/
+.env
+.env.*
+*.log
+.claude/
+.mcp.json
+.DS_Store
+.demo-build.json
+.omnicord/
+omnicord-video-script.md
+*.tgz
