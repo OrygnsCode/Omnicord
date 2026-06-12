@@ -1,0 +1,35 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.orygnscode/omnicord",
+  "description": "Your AI runs your Discord server: chat, moderation, admin, even building it all from one brief.",
+  "repository": {
+    "url": "https://github.com/OrygnsCode/Omnicord",
+    "source": "github"
+  },
+  "version": "1.0.1",
+  "packages": [
+    {
+      "registryType": "npm",
+      "identifier": "@orygn/omnicord",
+      "version": "1.0.1",
+      "transport": {
+        "type": "stdio"
+      },
+      "environmentVariables": [
+        {
+          "name": "DISCORD_TOKEN",
+          "description": "Bot token from the Discord Developer Portal. The init wizard sets this up.",
+          "isRequired": true,
+          "isSecret": true,
+          "format": "string"
+        },
+        {
+          "name": "OMNICORD_GUILD",
+          "description": "Optional default server id so tools can omit the guild parameter.",
+          "isRequired": false,
+          "format": "string"
+        }
+      ]
+    }
+  ]
+}

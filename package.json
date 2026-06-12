@@ -1,6 +1,6 @@
 {
   "name": "@orygn/omnicord",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Omnicord: an MCP server for Discord. Chat, moderate, administrate, and build out entire servers through any MCP client.",
   "type": "module",
   "license": "Elastic-2.0",
@@ -55,5 +55,6 @@
     "@types/node": "^24.0.0",
     "tsx": "^4.20.0",
     "typescript": "^5.9.0"
-  }
+  },
+  "mcpName": "io.github.orygnscode/omnicord"
 }

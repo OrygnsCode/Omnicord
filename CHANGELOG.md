@@ -5,6 +5,16 @@ Keep a Changelog, and the project follows semantic versioning: while the
 major version is 0 the API may still shift between minor versions. Version
 1.0.0 marks the public launch.
 
+## 1.0.1 (2026-06-12)
+
+Registry metadata for the official MCP registry listing.
+
+### Added
+
+- The mcpName field in package.json and a server.json, both required by
+  registry.modelcontextprotocol.io to verify that the npm package and
+  the registry listing describe the same server.
+
 ## 1.0.0 (2026-06-12)
 
 The public launch. Omnicord is published to npm as `@orygn/omnicord`,
