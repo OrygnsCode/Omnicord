@@ -1,17 +1,17 @@
 {
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
-  "name": "io.github.orygnscode/omnicord",
+  "name": "io.github.OrygnsCode/omnicord",
   "description": "Your AI runs your Discord server: chat, moderation, admin, even building it all from one brief.",
   "repository": {
     "url": "https://github.com/OrygnsCode/Omnicord",
     "source": "github"
   },
-  "version": "1.0.1",
+  "version": "1.0.2",
   "packages": [
     {
       "registryType": "npm",
       "identifier": "@orygn/omnicord",
-      "version": "1.0.1",
+      "version": "1.0.2",
       "transport": {
         "type": "stdio"
       },

@@ -5,6 +5,11 @@ Keep a Changelog, and the project follows semantic versioning: while the
 major version is 0 the API may still shift between minor versions. Version
 1.0.0 marks the public launch.
 
+## 1.0.2 (2026-06-12)
+
+Corrects the mcpName casing to match the GitHub namespace exactly
+(io.github.OrygnsCode), which the registry validates case-sensitively.
+
 ## 1.0.1 (2026-06-12)
 
 Registry metadata for the official MCP registry listing.
