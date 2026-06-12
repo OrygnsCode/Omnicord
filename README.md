@@ -175,6 +175,11 @@ package root regardless of what directory the client spawns it from.
 The docs are written to be read by AI assistants too: paste a page at
 your AI and have it walk you through.
 
+Omnicord is also listed on the
+[official MCP registry](https://registry.modelcontextprotocol.io),
+[Smithery](https://smithery.ai/servers/orygn/omnicord), and
+[Docker Hub](https://hub.docker.com/r/orygn/omnicord).
+
 ## Tests
 
 ```
