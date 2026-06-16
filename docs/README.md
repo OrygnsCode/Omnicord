@@ -1,5 +1,8 @@
 # Omnicord documentation
 
+Video: the [setup walkthrough](https://www.youtube.com/watch?v=Qk0lY5PGHSE)
+covers installation from a blank machine, start to finish.
+
 - [Getting started](getting-started.md): from nothing to a working setup,
   with the wizard or by hand.
 - [Connecting AI clients](clients.md): exact configuration for Claude

@@ -17,11 +17,15 @@ do and how to check it worked.
 
 ## Install
 
-Once Omnicord is published, the quickest path is npx, which needs no clone:
+The quickest path is npx, which needs no clone:
 
 ```
 npx @orygn/omnicord init
 ```
+
+Prefer to follow along on video? The full setup walkthrough, from a blank
+machine to a working install, is here:
+https://www.youtube.com/watch?v=Qk0lY5PGHSE
 
 To run from source instead (or to develop against it):
 
