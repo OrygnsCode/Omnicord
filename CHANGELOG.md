@@ -1,9 +1,8 @@
 # Changelog
 
 All notable changes to Omnicord are recorded here. The format follows
-Keep a Changelog, and the project follows semantic versioning: while the
-major version is 0 the API may still shift between minor versions. Version
-1.0.0 marks the public launch.
+Keep a Changelog, and the project follows semantic versioning. Version
+1.0.0 marked the public launch; releases since follow semver.
 
 ## 1.0.2 (2026-06-12)
 

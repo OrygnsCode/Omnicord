@@ -51,7 +51,9 @@ reaches the REST client's auth header and the gateway identify, and
 nowhere else. Webhook tokens are treated the same way, redacted from every
 listing (there is a regression test asserting the word "token" never
 appears in webhook output). The setup wizard takes the token with terminal
-echo disabled and writes it only to the gitignored `.env`.
+echo disabled and writes it only to a local file: the gitignored `.env`
+for a source checkout, or `.omnicord/.env` in the user's home folder for
+an installed copy.
 
 The remote transport's bearer token is compared in constant time to avoid
 a timing side channel.
@@ -62,9 +64,10 @@ Omnicord never requests more than it is given. The setup wizard's default
 invite is a curated permission bundle that deliberately excludes the
 Administrator bit; Administrator is offered only as an explicitly labeled
 opt-in, and the confirmation gate applies at every permission level.
-Permission presets for role creation never include Administrator. The catalog defines scope profiles (observer
-through admin) so a deployment can expose only the tools it needs, and the
-OPA policy hook (planned) gates individual calls against Rego policy.
+Permission presets for role creation never include Administrator. The tool catalog also specifies optional, deployment-level scope profiles
+and a policy hook for restricting which tools a deployment exposes and
+which calls it permits; these are part of the documented contract and
+roadmap rather than controls shipped today.
 
 ### MCP03 Tool Poisoning
 
@@ -79,8 +82,9 @@ no rug-pull surface.
 Dependencies are few and first-party where it matters: the official MCP
 SDK and the official discord.js REST and gateway libraries. `npm audit`
 reports zero vulnerabilities. The published package contains only the
-compiled `dist` output and the README, verified by inspecting the packed
-tarball; no source, scripts, or `.env` ship. The Docker image runs as a
+compiled `dist` output, the README, the LICENSE, and package.json,
+verified by inspecting the packed tarball; no source, scripts, or `.env`
+ship. The Docker image runs as a
 non-root user and never bakes a token in.
 
 ### MCP05 Command Injection and Execution

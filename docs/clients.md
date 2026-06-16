@@ -14,9 +14,10 @@ There are two transports:
   [self-hosting.md](self-hosting.md).
 
 In every stdio configuration, replace the path with the absolute path to
-your built `dist/index.js`, or use the npx form once Omnicord is published
-to npm. No token goes in the client configuration; Omnicord reads it from
-the `.env` file next to the package.
+your built `dist/index.js`, or use the npx form (no clone needed). No
+token goes in the client configuration; Omnicord reads it from its `.env`
+file: next to the package for a source checkout, or `.omnicord/.env` in
+your user folder for an npx or global install.
 
 ## The two command forms
 
@@ -29,7 +30,7 @@ From source:
 }
 ```
 
-From npm (after publish):
+From npm:
 
 ```json
 {

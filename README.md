@@ -50,9 +50,10 @@ The wizard goes from a bare Discord application to a working setup in
 about a minute. It takes the bot token with input hidden, verifies it
 live against Discord, checks the privileged intent toggles and waits
 while you fix any that are off, generates an invite link at the
-permission level you pick, saves the token to a gitignored `.env`, and
-writes the omnicord entry into your AI client's config (backing the file
-up first). Claude Desktop (including the Microsoft Store build), Cursor,
+permission level you pick, saves the token locally (a gitignored `.env`
+for a source checkout, or `.omnicord/.env` in your user folder for an
+npx or global install), and writes the omnicord entry into your AI
+client's config (backing the file up first). Claude Desktop (including the Microsoft Store build), Cursor,
 Windsurf, and project level Claude Code are detected automatically;
 anything else gets a snippet to paste.
 
@@ -117,25 +118,28 @@ close DNS rebinding. Details in [self-hosting](docs/self-hosting.md).
 
 ## Docker
 
-The image runs the HTTP transport as a non root user with the container
-health check wired to the health endpoint. It binds beyond loopback, so
-it requires `OMNICORD_HTTP_TOKEN` and exits with a clear message without
-one. The token never lives in the image; everything arrives through the
-environment at runtime.
+A published image is on Docker Hub (`orygn/omnicord`), or you can build
+your own. The image runs the HTTP transport as a non root user with the
+container health check wired to the health endpoint. It binds beyond
+loopback, so it requires `OMNICORD_HTTP_TOKEN` and exits with a clear
+message without one. The token never lives in the image; everything
+arrives through the environment at runtime.
 
 ```
-docker build -t omnicord .
 docker run -d -p 3414:3414 \
   -e DISCORD_TOKEN=your-bot-token \
   -e OMNICORD_HTTP_TOKEN=a-strong-secret \
-  omnicord
+  orygn/omnicord
 ```
 
-Or with compose, after exporting the two secrets: `docker compose up -d`.
+To build it yourself instead: `docker build -t omnicord .`. Or with
+compose, after exporting the two secrets: `docker compose up -d`.
 
 ## Configuration
 
-Environment variables, or a `.env` file next to `package.json`:
+Environment variables, or a `.env` file (the wizard writes one for you;
+source checkouts use `.env` next to `package.json`, npx and global
+installs use `.omnicord/.env` in your user folder):
 
 | Variable | What it does |
 |---|---|
@@ -162,8 +166,10 @@ Client config for stdio (Claude Desktop and compatible):
 }
 ```
 
-No token goes in the client config; the server reads `.env` from its own
-package root regardless of what directory the client spawns it from.
+No token goes in the client config. The server finds `.env` no matter
+where the client spawns it from: it checks the current directory, then
+the package root, then `.omnicord` in your user folder, and a real
+environment variable overrides all of them.
 
 ## Documentation
 
@@ -210,9 +216,9 @@ can be audited; it is not up for resale as a service.
 
 ## Versioning
 
-Semantic versioning, tracked in [CHANGELOG.md](CHANGELOG.md). While the
-major version is 0 the tool surface may still shift between minor
-versions; 1.0.0 marks the public launch. The version in `package.json`
+Semantic versioning, tracked in [CHANGELOG.md](CHANGELOG.md). 1.0.0
+marked the public launch; releases since follow semver, and the npm
+badge above shows the current version. The version in `package.json`
 flows everywhere automatically: the MCP server identity, the health
 endpoint, and the wizard.
 

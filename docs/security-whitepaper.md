@@ -115,8 +115,8 @@ Honesty is part of the trust:
   "the AI cannot do irreversible harm without you," not "the AI can never
   be misled."
 - Always-on features such as scheduled messages need the process to be
-  running, which is a reason to use the hosted or container deployment
-  rather than a laptop that sleeps.
+  running, which is a reason to run it as an always-on container or
+  server rather than a laptop that sleeps.
 
 ## Reporting a problem
 

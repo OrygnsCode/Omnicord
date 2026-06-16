@@ -4,9 +4,9 @@ Version: 0.1 (draft)
 Status: design spec, pre-implementation
 Owner: Orygn LLC
 
-This document is the contract for the Omnicord tool surface. Every tool the server will expose is listed here with its tier, destructiveness, required Discord permission, key parameters, and behavior. The implementation, the scope profiles, the OPA policy actions, and the eventual directory listing all derive from this file. Change the contract here first, then change code.
+This document is the contract for the Omnicord tool surface. Every tool the server exposes is listed here with its tier, destructiveness, required Discord permission, key parameters, and behavior. The implementation, the scope profiles, the policy actions, and the registry listings all derive from this file. Change the contract here first, then change code.
 
-Totals: 152 tools. 15 in the always-loaded core set, 137 loaded on demand.
+Totals: 148 tools implemented and shipped, 15 in the always-loaded core set and 133 loaded on demand. A few additional tools, notably application-command management, are specified in this contract but deferred and not yet shipped.
 
 ## 1. Design conventions
 
@@ -103,7 +103,7 @@ Four layers, evaluated in order:
 1. Discord permission: what the bot can physically do, per guild and channel. Listed in the Requires column below. "none" means any bot in the guild can do it.
 2. Gateway intents: privileged intents gate whole capability groups. Members intent gates member listing and search. Message Content intent gates reading and searching message bodies. Voice States gates voice tools and voice events.
 3. Omnicord scope profile: a deployment-level allowlist of tools (section 9). A deployment running the `communicator` profile does not expose moderation tools at all.
-4. OPA policy hook (optional): every call is mapped to an action string `omnicord.<category>.<tool>` and evaluated against Rego policy with the full argument set as input. This is the Orygn differentiator: policies like "may post in #support, may never delete messages or touch roles" are expressed here.
+4. Policy hook (optional, planned): every call maps to an action string `omnicord.<category>.<tool>` so a deployment can evaluate it against an external policy engine with the full argument set as input, expressing rules like "may post in #support, may never delete messages or touch roles."
 
 ### 1.9 Rate limiting
 
@@ -395,7 +395,7 @@ Real-time gateway events surfaced through MCP. No notable competitor ships this.
 
 ## 21. Scope profiles
 
-Deployment-level tool allowlists. A deployment picks one; OPA policy can tighten further but never widen.
+Deployment-level tool allowlists. A deployment picks one; a policy hook can tighten further but never widen.
 
 | Profile | Intended user | Gets |
 |---|---|---|
