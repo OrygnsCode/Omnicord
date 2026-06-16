@@ -4,7 +4,7 @@ Version: 0.1 (draft)
 Status: design spec, pre-implementation
 Owner: Orygn LLC
 
-This document is the contract for the Omnicord tool surface. Every tool the server exposes is listed here with its tier, destructiveness, required Discord permission, key parameters, and behavior. The implementation, the scope profiles, the policy actions, and the registry listings all derive from this file. Change the contract here first, then change code.
+This document is the contract for the Omnicord tool surface. Every tool the server exposes is listed here with its tier, destructiveness, required Discord permission, key parameters, and behavior. The implementation and the registry listings derive from this file. Change the contract here first, then change code.
 
 Totals: 148 tools implemented and shipped, 15 in the always-loaded core set and 133 loaded on demand. A few additional tools, notably application-command management, are specified in this contract but deferred and not yet shipped.
 
@@ -98,12 +98,10 @@ Discord error codes that slip through are translated to plain language with the 
 
 ### 1.8 Authorization layers
 
-Four layers, evaluated in order:
+Two layers, evaluated in order:
 
 1. Discord permission: what the bot can physically do, per guild and channel. Listed in the Requires column below. "none" means any bot in the guild can do it.
 2. Gateway intents: privileged intents gate whole capability groups. Members intent gates member listing and search. Message Content intent gates reading and searching message bodies. Voice States gates voice tools and voice events.
-3. Omnicord scope profile: a deployment-level allowlist of tools (section 9). A deployment running the `communicator` profile does not expose moderation tools at all.
-4. Policy hook (optional, planned): every call maps to an action string `omnicord.<category>.<tool>` so a deployment can evaluate it against an external policy engine with the full argument set as input, expressing rules like "may post in #support, may never delete messages or touch roles."
 
 ### 1.9 Rate limiting
 
@@ -388,25 +386,12 @@ Real-time gateway events surfaced through MCP. No notable competitor ships this.
 
 | Tool | D | Requires | Key parameters | Summary |
 |---|---|---|---|---|
-| run_setup_check * | no | none | guild (optional) | End-to-end health check: token validity, which intents are enabled in the portal versus needed, per-guild permission audit against the scope profile, role hierarchy sanity. Output is a fix-it list with Developer Portal paths. Run on first connect and whenever things act weird. |
+| run_setup_check * | no | none | guild (optional) | End-to-end health check: token presence and validity, the three privileged intents (enabled in the portal versus needed), guild count against the verification gate, gateway connection, and default-guild membership. Output is a plain-English pass or fix list. Run on first connect and whenever things act weird. |
 | explain_permissions | no | none | actor (bot or member), action, channel | Answers "can X do Y in Z, and if not, why not" by resolving the full permission chain. The preflight engine, exposed. |
 | get_rate_limit_status | no | none | (none) | Current bucket states, queue depth, and invalid-request counter. |
 | find * | no | none | query, types[] (channel, role, member, emoji, thread, event), guild | The fuzzy resolver as a tool. Returns ranked candidates with IDs and context so the caller can disambiguate once and reuse the ID. |
 
-## 21. Scope profiles
-
-Deployment-level tool allowlists. A deployment picks one; a policy hook can tighten further but never widen.
-
-| Profile | Intended user | Gets |
-|---|---|---|
-| observer | analytics, read-only review | All read tools (list, get, search, find, read_messages, diagnostics). No writes. |
-| communicator | chat assistant | observer + send_message, edit own, reactions, polls, send_dm, threads (create, reply), forum posts, schedule_message. |
-| community_manager | community ops | communicator + channels, categories, roles (no delete), threads, forums, events, webhooks, expressions, invites, welcome screen, onboarding. |
-| moderator | mod team | community_manager + moderation category, message deletion, bulk tools, AutoMod. |
-| architect | server building | community_manager + all builder tools + delete within entities the current build plan created. |
-| admin | full control | Everything in this catalog. |
-
-## 22. Explicit non-goals for v1
+## 21. Explicit non-goals
 
 - Voice audio (play, capture, transcribe). Planned v2 flagship; blocked on DAVE E2EE work.
 - Acting as a user account in any form. Self-bot patterns violate Discord ToS and will never ship.
@@ -414,10 +399,7 @@ Deployment-level tool allowlists. A deployment picks one; a policy hook can tigh
 - Monetization endpoints (SKUs, entitlements), Activities, and the Social SDK surface.
 - Training any model on message content obtained through the API (Developer Policy rule 21). Runtime inference only.
 
-## 23. Open questions
+## 22. Open questions
 
-1. Blueprint schema versioning: semver the format from day one, or stay loose until v1 freezes.
-2. Where the blueprint store lives for local deployments (flat files in the config dir is the current lean answer) versus hosted (Postgres).
-3. Whether scheduled messages and event subscriptions need durable storage in stdio mode, where the process lifetime is the client session.
-4. Whether `search_messages` should maintain an opt-in local index for guilds that grant Message Content, to make search fast and honest about coverage.
-5. License at the public flip: Apache-2.0 for adoption versus BSL-style for commercial protection.
+1. Blueprint schema versioning: semver the format, or stay loose for now.
+2. Whether `search_messages` should maintain an opt-in local index for guilds that grant Message Content, to make search fast and honest about coverage.

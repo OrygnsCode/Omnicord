@@ -64,10 +64,7 @@ Omnicord never requests more than it is given. The setup wizard's default
 invite is a curated permission bundle that deliberately excludes the
 Administrator bit; Administrator is offered only as an explicitly labeled
 opt-in, and the confirmation gate applies at every permission level.
-Permission presets for role creation never include Administrator. The tool catalog also specifies optional, deployment-level scope profiles
-and a policy hook for restricting which tools a deployment exposes and
-which calls it permits; these are part of the documented contract and
-roadmap rather than controls shipped today.
+Permission presets for role creation never include Administrator.
 
 ### MCP03 Tool Poisoning
 
