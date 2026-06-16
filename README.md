@@ -2,6 +2,7 @@
 
 [![CI](https://github.com/OrygnsCode/Omnicord/actions/workflows/ci.yml/badge.svg)](https://github.com/OrygnsCode/Omnicord/actions/workflows/ci.yml)
 [![npm](https://img.shields.io/npm/v/%40orygn%2Fomnicord)](https://www.npmjs.com/package/@orygn/omnicord)
+[![Glama score](https://glama.ai/mcp/servers/OrygnsCode/Omnicord/badges/score.svg)](https://glama.ai/mcp/servers/OrygnsCode/Omnicord)
 [![License: Elastic 2.0](https://img.shields.io/badge/license-Elastic--2.0-blue)](LICENSE)
 [![Node](https://img.shields.io/badge/node-%3E%3D20-brightgreen)](package.json)
 [![MCP](https://img.shields.io/badge/MCP-stdio%20%2B%20HTTP-8A2BE2)](docs/clients.md)
