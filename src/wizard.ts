@@ -295,25 +295,34 @@ export async function runWizard(): Promise<void> {
       localAppData: process.env.LOCALAPPDATA,
       cwd: process.cwd(),
     });
-    const present = candidates.filter((c) => c.exists || c.client === "claude-code");
+    const present = candidates.filter(
+      (c) => c.exists || c.appPresent || c.client === "claude-code"
+    );
 
     console.log("\n  Where should the omnicord server be registered?");
+    console.log(
+      dim('  This only adds an "omnicord" entry; everything else in the file')
+    );
+    console.log(dim("  is left as-is, and the original is backed up first."));
     present.forEach((c, idx) =>
       console.log(
-        `    ${bold(String(idx + 1))}. ${c.label}${c.exists ? "" : dim(" (file will be created)")}\n       ${dim(c.path)}`
+        `    ${bold(String(idx + 1))}. ${c.label}${c.exists ? "" : dim(" (config file will be created)")}\n       ${dim(c.path)}`
       )
     );
-    console.log(`    ${bold(String(present.length + 1))}. Just print the config snippet`);
+    console.log(
+      `    ${bold(String(present.length + 1))}. Just print the config snippet (paste it yourself)`
+    );
 
     const entry = {
       command: "node",
       args: [join(packageRoot, "dist", "index.js")],
     };
 
-    // Default to the first client whose config file actually exists on
-    // this machine. Printing the snippet stays the fallback when nothing
-    // was detected, so pressing Enter does the right thing either way.
-    const detected = present.findIndex((c) => c.exists);
+    // Default to the first detected client: one with an existing config,
+    // or failing that one that looks installed. Printing the snippet stays
+    // the fallback when nothing was detected, so pressing Enter does the
+    // right thing either way.
+    const detected = present.findIndex((c) => c.exists || c.appPresent);
     const defaultChoice = detected >= 0 ? detected + 1 : present.length + 1;
     if (detected >= 0) {
       console.log(
@@ -328,14 +337,30 @@ export async function runWizard(): Promise<void> {
     if (Number.isInteger(whereIndex) && whereIndex >= 1 && whereIndex <= present.length) {
       const target = present[whereIndex - 1];
       const before = existsSync(target.path) ? readFileSync(target.path, "utf8") : undefined;
-      if (before !== undefined) {
-        const backup = `${target.path}.bak-omnicord-${Date.now()}`;
-        copyFileSync(target.path, backup);
-        console.log(dim(`  Backed up the existing file to ${backup}`));
+      let merged: string | undefined;
+      try {
+        merged = mergeClientConfig(before, entry);
+      } catch {
+        merged = undefined;
       }
-      mkdirSync(dirname(target.path), { recursive: true });
-      writeFileSync(target.path, mergeClientConfig(before, entry));
-      console.log(`  ${green("Wrote omnicord into")} ${target.path}`);
+      if (merged === undefined) {
+        // The existing file is not valid JSON. Never overwrite it; the
+        // user's config is safer untouched than clobbered.
+        console.log(
+          yellow(`  ${target.path} is not valid JSON, so it was left untouched.`)
+        );
+        console.log("  Add this to that file's mcpServers by hand:\n");
+        console.log(JSON.stringify({ mcpServers: { omnicord: entry } }, null, 2));
+      } else {
+        if (before !== undefined) {
+          const backup = `${target.path}.bak-omnicord-${Date.now()}`;
+          copyFileSync(target.path, backup);
+          console.log(dim(`  Backed up the existing file to ${backup}`));
+        }
+        mkdirSync(dirname(target.path), { recursive: true });
+        writeFileSync(target.path, merged);
+        console.log(`  ${green("Wrote omnicord into")} ${target.path}`);
+      }
     } else {
       console.log("\n  Add this to your client's MCP config:\n");
       console.log(

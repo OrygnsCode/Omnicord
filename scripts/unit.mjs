@@ -469,6 +469,8 @@ const candidates = clientConfigCandidates({
 check(candidates.some((c) => c.client === "claude-desktop" && c.path.includes("Roaming")), "windows lists the standard desktop path");
 check(candidates.some((c) => c.client === "claude-code" && c.path.includes("proj")), "project mcp.json is always offered");
 check(candidates.some((c) => c.client === "cursor"), "cursor path is listed");
+check(candidates.every((c) => typeof c.appPresent === "boolean"), "candidates carry an appPresent flag");
+check(candidates.some((c) => c.client === "cursor" && c.path.includes("proj")), "cursor project scope is offered");
 
 const macCandidates = clientConfigCandidates({
   platform: "darwin",

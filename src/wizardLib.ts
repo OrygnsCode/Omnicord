@@ -1,5 +1,5 @@
 import { existsSync, readdirSync } from "node:fs";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { PermissionFlagsBits } from "discord-api-types/v10";
 import { PERMISSION_PRESETS } from "./discord/preflight.js";
 
@@ -96,14 +96,22 @@ export interface ConfigCandidate {
   client: string;
   label: string;
   path: string;
+  // The config file already exists: the client has MCP servers set up.
   exists: boolean;
+  // The client looks installed (its config directory is present) even if
+  // it has no MCP config file yet. Offered so a first-time MCP user is
+  // not dropped to the manual snippet; the wizard creates the file.
+  appPresent: boolean;
 }
 
-// Known client config locations. Detection only reports what is actually
-// on disk, plus the always-available project-level option for Claude
-// Code. The Microsoft Store build of Claude Desktop keeps its config
-// under a package directory whose name is stable per publisher, found by
-// scanning rather than hardcoding the hash.
+// Known client config locations. For each, the wizard records whether the
+// config file exists and whether the client looks installed (its config
+// directory is present), so it can offer a client even before that client
+// has any MCP config file. Claude Code's project option is always offered.
+// The Microsoft Store build of Claude Desktop keeps its config under a
+// package directory whose name is stable per publisher, found by scanning
+// rather than hardcoding the hash. This function only reads the disk; it
+// never creates or writes anything.
 export function clientConfigCandidates(env: {
   platform: NodeJS.Platform;
   homedir: string;
@@ -114,7 +122,14 @@ export function clientConfigCandidates(env: {
   const out: ConfigCandidate[] = [];
 
   const push = (client: string, label: string, path: string) => {
-    out.push({ client, label, path, exists: existsSync(path) });
+    out.push({
+      client,
+      label,
+      path,
+      exists: existsSync(path),
+      // Installed if the config directory exists, even without the file.
+      appPresent: existsSync(dirname(path)),
+    });
   };
 
   if (env.platform === "win32") {
@@ -168,6 +183,7 @@ export function clientConfigCandidates(env: {
   }
 
   push("cursor", "Cursor (global)", join(env.homedir, ".cursor", "mcp.json"));
+  push("cursor", "Cursor (this project)", join(env.cwd, ".cursor", "mcp.json"));
   push(
     "windsurf",
     "Windsurf",
