@@ -117,9 +117,15 @@ export function canModerate(input: {
     return { ok: false, reason: `The bot cannot ${input.action} itself.` };
   }
   if (input.targetId === input.ownerId) {
+    const pastTense: Record<string, string> = {
+      kick: "kicked",
+      ban: "banned",
+      timeout: "timed out",
+    };
+    const verb = pastTense[input.action] ?? `${input.action}ed`;
     return {
       ok: false,
-      reason: `The server owner cannot be ${input.action}ed by anyone.`,
+      reason: `The server owner cannot be ${verb} by anyone.`,
     };
   }
   if (input.targetTopPosition >= input.botTopPosition) {
