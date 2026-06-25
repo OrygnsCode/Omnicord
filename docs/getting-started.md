@@ -59,9 +59,12 @@ you find out immediately if something is wrong rather than later:
    way. It then lists the servers the bot joined and lets you pick a
    default.
 5. It saves the token to a local `.env` file and writes the Omnicord entry
-   into your AI client's configuration, backing up the existing file first.
+   into your AI client's configuration, adding only that entry, leaving
+   everything else in the file as-is, and backing up the original first.
    Claude Desktop, Cursor, Windsurf, and project-level Claude Code are
-   detected automatically. Anything else gets a snippet to paste.
+   detected automatically, even before you have configured MCP in them. If
+   a config file is not valid JSON, the wizard leaves it untouched and
+   prints a snippet to paste instead. Anything else also gets a snippet.
 
 After the wizard finishes, fully restart your AI client (quit from the
 system tray, not just the window). Then in a new conversation, ask it to

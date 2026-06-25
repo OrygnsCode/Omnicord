@@ -4,6 +4,33 @@ All notable changes to Omnicord are recorded here. The format follows
 Keep a Changelog, and the project follows semantic versioning. Version
 1.0.0 marked the public launch; releases since follow semver.
 
+## 1.0.3 (2026-06-25)
+
+Setup wizard improvements and a moderation message fix, both found
+through a full live stress test of the tool surface.
+
+### Added
+
+- The wizard now offers a client even when it is installed but has no MCP
+  config file yet (its config directory is present), instead of dropping
+  a first-time MCP user to the manual snippet. It creates the file in
+  that case.
+- Cursor project scope (`.cursor/mcp.json`) alongside the global Cursor
+  config.
+
+### Changed
+
+- The registration step states up front that it only adds an `omnicord`
+  entry, leaves everything else as-is, and backs up the original first.
+
+### Fixed
+
+- The owner-protection message used naive past tense, so a ban read
+  "cannot be baned." It now reads "banned," with correct forms for kick
+  and timeout.
+- If a client config file is not valid JSON, the wizard leaves it
+  untouched and prints the snippet to paste by hand, instead of failing.
+
 ## 1.0.2 (2026-06-12)
 
 Corrects the mcpName casing to match the GitHub namespace exactly

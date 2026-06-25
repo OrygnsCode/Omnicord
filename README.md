@@ -54,8 +54,10 @@ permission level you pick, saves the token locally (a gitignored `.env`
 for a source checkout, or `.omnicord/.env` in your user folder for an
 npx or global install), and writes the omnicord entry into your AI
 client's config (backing the file up first). Claude Desktop (including the Microsoft Store build), Cursor,
-Windsurf, and project level Claude Code are detected automatically;
-anything else gets a snippet to paste.
+Windsurf, and project level Claude Code are detected automatically, even
+before you have set up MCP in them; anything else gets a snippet to
+paste. It only adds the omnicord entry and never overwrites the rest of
+the file.
 
 Then fully restart your AI client and ask it:
 
