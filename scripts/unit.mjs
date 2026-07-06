@@ -112,6 +112,10 @@ check((PERMISSION_PRESETS.member & P.SendMessages) !== 0n, "member preset can se
 check((PERMISSION_PRESETS.member & P.ManageMessages) === 0n, "member preset cannot moderate");
 check((PERMISSION_PRESETS.moderator & P.ModerateMembers) !== 0n, "moderator preset can timeout");
 check((PERMISSION_PRESETS.admin & P.Administrator) === 0n, "no preset grants administrator");
+check((PERMISSION_PRESETS.admin & P.CreateEvents) === P.CreateEvents, "admin preset can create scheduled events (post 2026-02-23)");
+check((PERMISSION_PRESETS.admin & P.CreateGuildExpressions) === P.CreateGuildExpressions, "admin preset can create emoji, stickers, and soundboard sounds (post 2026-02-23)");
+check((PERMISSION_PRESETS.admin & P.ManageEvents) !== 0n, "admin preset keeps Manage Events to edit others' events");
+check((PERMISSION_PRESETS.admin & P.ManageGuildExpressions) !== 0n, "admin preset keeps Manage Expressions to edit others' expressions");
 
 // Confirmation gate (safety)
 
@@ -458,6 +462,8 @@ check(
 check(INVITE_CHOICES[0].key === "recommended", "recommended invite choice is first");
 check((INVITE_CHOICES[0].permissions & P.Administrator) === 0n, "recommended choice never grants Administrator");
 check(INVITE_CHOICES[2].permissions === P.Administrator, "administrator choice is exactly the admin bit");
+check((INVITE_CHOICES[0].permissions & P.CreateEvents) === P.CreateEvents, "recommended invite can create scheduled events");
+check((INVITE_CHOICES[0].permissions & P.CreateGuildExpressions) === P.CreateGuildExpressions, "recommended invite can create emoji, stickers, and soundboard sounds");
 
 const candidates = clientConfigCandidates({
   platform: "win32",

@@ -229,8 +229,13 @@ const ADMIN_PRESET =
   P.ManageGuild |
   P.ManageRoles |
   P.ManageWebhooks |
+  // Discord split Create from Manage on 2026-02-23: Create* makes new events
+  // and expressions, Manage* edits and deletes ones made by others. An admin
+  // needs both, to create and to manage.
   P.ManageEvents |
+  P.CreateEvents |
   P.ManageGuildExpressions |
+  P.CreateGuildExpressions |
   P.CreateInstantInvite;
 
 export const PERMISSION_PRESETS: Record<string, bigint> = {

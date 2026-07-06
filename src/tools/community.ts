@@ -538,7 +538,7 @@ export function registerCommunityTools(
       const perms = await botPermissions(rest, guildId);
       requirePermissions(
         perms,
-        [[P.ManageGuildExpressions, "Manage Expressions"]],
+        [[P.CreateGuildExpressions, "Create Expressions"]],
         "in this server"
       );
 

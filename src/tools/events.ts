@@ -180,7 +180,7 @@ export function registerEventTools(
       const { rest, guildId } = await enter(config, guild);
 
       const perms = await botPermissions(rest, guildId);
-      requirePermissions(perms, [[P.ManageEvents, "Manage Events"]], "in this server");
+      requirePermissions(perms, [[P.CreateEvents, "Create Events"]], "in this server");
 
       const start = parseWhen(start_time, "start_time");
       const warnings: string[] = [];
