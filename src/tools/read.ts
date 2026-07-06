@@ -5,6 +5,7 @@ import type {
   APIGuildMember,
   APIMessage,
   RESTGetAPIGuildMembersSearchResult,
+  RESTGetAPIGuildMessagesSearchResult,
 } from "discord-api-types/v10";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { OmnicordConfig } from "../config.js";
@@ -280,84 +281,139 @@ export function registerReadTools(
     {
       title: "Search messages",
       description:
-        "Search recent messages in one channel by content and author. The " +
-        "bot API has no native search, so this scans history newest to " +
-        "oldest up to scan_limit messages and reports exactly how far it " +
-        "looked. Results are case-insensitive substring matches.",
+        "Search the server's message history through Discord's native search " +
+        "index. Covers every channel the bot can read, or one channel if you " +
+        "name it, and looks inside embeds and polls, not just plain text. " +
+        "Matching is whole-word full text, not substring, so search for words " +
+        "rather than fragments. Filter by author, by what a message carries " +
+        "(image, link, file, and so on), or by pinned state, and order by " +
+        "newest first or by relevance.",
       inputSchema: {
-        channel: z.string().describe("Channel name or ID to search in."),
         guild: guildParam,
-        query: z.string().min(1).describe("Text to look for."),
+        query: z.string().min(1).max(1024).optional()
+          .describe(
+            "Words to look for. Whole-word full text match, not substring. " +
+              "Optional if you filter by author, has, or pinned instead."
+          ),
+        channel: z.string().optional()
+          .describe("Limit to one channel by name or ID. Default: the whole server."),
         author: z.string().optional()
-          .describe("Only messages whose author name matches this."),
-        limit: z.number().int().min(1).max(50).optional()
-          .describe("Max results. Default 10."),
-        scan_limit: z.number().int().min(50).max(1000).optional()
-          .describe("How many messages to scan before stopping. Default 300."),
+          .describe("Only messages from this member (name or ID)."),
+        has: z.enum([
+          "image", "video", "sound", "file", "sticker",
+          "embed", "link", "poll", "snapshot",
+        ]).optional()
+          .describe("Only messages that carry this kind of content."),
+        pinned: z.boolean().optional()
+          .describe("Only pinned (true) or only unpinned (false) messages."),
+        sort: z.enum(["recent", "relevant"]).optional()
+          .describe("Order by newest first (recent, the default) or best match (relevant)."),
+        limit: z.number().int().min(1).max(25).optional()
+          .describe("Max results to return, 1 to 25. Default 10."),
+        offset: z.number().int().min(0).max(9975).optional()
+          .describe("Skip this many results, for paging. Default 0."),
       },
       annotations: { readOnlyHint: true },
     },
-    guarded(async ({ channel, guild, query, author, limit, scan_limit }) => {
+    guarded(async ({ guild, query, channel, author, has, pinned, sort, limit, offset }) => {
       const { rest, guildId } = await enter(config, guild);
-      const target = await resolveChannel(
-        rest,
-        guildId,
-        channel,
-        TEXT_BEARING_TYPES
-      );
 
-      const wanted = limit ?? 10;
-      const maxScan = scan_limit ?? 300;
-      const needle = query.toLowerCase();
-      const authorNeedle = author?.toLowerCase();
+      // A search with no filter would return the whole server, so require one.
+      if (
+        query === undefined &&
+        author === undefined &&
+        has === undefined &&
+        pinned === undefined
+      ) {
+        return fail("Give at least one of query, author, has, or pinned to search for.");
+      }
 
-      const hits: ReturnType<typeof digestMessage>[] = [];
-      let scanned = 0;
-      let cursor: string | undefined;
-      let oldestSeen: string | undefined;
+      const params = new URLSearchParams();
+      if (query !== undefined) params.set("content", query);
+      params.set("limit", String(limit ?? 10));
+      if (offset !== undefined && offset > 0) params.set("offset", String(offset));
+      params.set("sort_by", sort === "relevant" ? "relevance" : "timestamp");
+      if (has !== undefined) params.append("has", has);
+      if (pinned !== undefined) params.set("pinned", String(pinned));
 
-      while (scanned < maxScan && hits.length < wanted) {
-        const page = new URLSearchParams({
-          limit: String(Math.min(100, maxScan - scanned)),
-        });
-        if (cursor) page.set("before", cursor);
-        const batch = (await rest.get(Routes.channelMessages(target.id), {
-          query: page,
-        })) as APIMessage[];
-        if (batch.length === 0) break;
+      let channelInfo: { id: string; name: string } | undefined;
+      if (channel !== undefined) {
+        const target = await resolveChannel(rest, guildId, channel, TEXT_BEARING_TYPES);
+        channelInfo = { id: target.id, name: target.name ?? channel };
+        params.append("channel_id", target.id);
+      }
 
-        for (const m of batch) {
-          scanned += 1;
-          oldestSeen = m.timestamp;
-          const contentHit = (m.content ?? "").toLowerCase().includes(needle);
-          const authorHit =
-            !authorNeedle ||
-            m.author.username.toLowerCase().includes(authorNeedle) ||
-            (m.author.global_name ?? "").toLowerCase().includes(authorNeedle);
-          if (contentHit && authorHit) {
-            hits.push(digestMessage(m));
-            if (hits.length >= wanted) break;
+      let authorInfo: { id: string; name: string } | undefined;
+      if (author !== undefined) {
+        const member = await resolveMember(rest, guildId, author);
+        authorInfo = { id: member.user.id, name: memberDisplayName(member) };
+        params.append("author_id", member.user.id);
+      }
+
+      const result = (await rest.get(Routes.guildMessagesSearch(guildId), {
+        query: params,
+      })) as RESTGetAPIGuildMessagesSearchResult;
+
+      // Discord answers with a 202-shaped body while a guild is first indexed.
+      if (!("total_results" in result)) {
+        const seconds = Math.max(1, Math.ceil(result.retry_after ?? 0));
+        return ok(
+          `The server's message index is still being built (${result.documents_indexed} ` +
+            `message(s) indexed so far). Try again in about ${seconds} second(s).`,
+          {
+            index_building: true,
+            documents_indexed: result.documents_indexed,
+            retry_after: result.retry_after,
           }
-        }
-        cursor = batch[batch.length - 1]?.id;
-        if (batch.length < 100) break;
+        );
+      }
+
+      // Name each hit's channel; thread hits arrive with their thread listed.
+      const channels = await getChannels(rest, guildId);
+      const channelName = new Map<string, string>();
+      for (const c of channels) {
+        if (c.name) channelName.set(c.id, c.name);
+      }
+      for (const t of result.threads ?? []) {
+        if (t.id && t.name) channelName.set(t.id, t.name);
+      }
+
+      // Surrounding context is no longer returned, so each group is one hit.
+      const matches = result.messages
+        .map((group) =>
+          (group.find((m) => (m as { hit?: boolean }).hit) ?? group[0]) as
+            | APIMessage
+            | undefined
+        )
+        .filter((m): m is APIMessage => m !== undefined)
+        .map((m) => ({
+          ...digestMessage(m),
+          channel: { id: m.channel_id, name: channelName.get(m.channel_id) ?? null },
+        }));
+
+      const scope = channelInfo ? `#${channelInfo.name}` : "the server";
+      const warnings: string[] = [];
+      if (result.doing_deep_historical_index) {
+        warnings.push(
+          "Older history is still being indexed, so some matches may be missing. " +
+            "Try again later for a complete search."
+        );
       }
 
       return ok(
-        `Found ${hits.length} match(es) for "${query}" in #${target.name}. ` +
-          `Scanned ${scanned} message(s)` +
-          (oldestSeen ? `, back to ${oldestSeen}.` : "."),
+        `Found ${result.total_results} match(es) in ${scope}` +
+          (query !== undefined ? ` for "${query}"` : "") +
+          `, showing ${matches.length}.`,
         {
-          channel: { id: target.id, name: target.name },
-          matches: hits,
-          scanned: { count: scanned, oldest_reached: oldestSeen ?? null },
+          query: query ?? null,
+          channel: channelInfo ?? null,
+          author: authorInfo ?? null,
+          total_results: result.total_results,
+          returned: matches.length,
+          offset: offset ?? 0,
+          matches,
         },
-        scanned >= maxScan
-          ? [
-              "Scan limit reached. Older messages were not searched; raise " +
-                "scan_limit to look further back.",
-            ]
-          : []
+        warnings
       );
     })
   );
