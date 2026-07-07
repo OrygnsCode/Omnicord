@@ -2,7 +2,7 @@
   "manifest_version": "0.2",
   "name": "omnicord",
   "display_name": "Omnicord",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "description": "Your AI runs your Discord server: chat, moderation, admin, even building it all from one brief.",
   "long_description": "Omnicord gives an AI assistant full operational control of a Discord server through your own bot: 151 tools covering chat, moderation, automod, events, and administration, up to building out a complete community server from a one paragraph brief. Destructive actions never execute on the first call; they return a preview and require explicit confirmation, enforced by the server itself rather than the model.",
   "author": {

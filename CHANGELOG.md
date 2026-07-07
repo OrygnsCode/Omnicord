@@ -4,6 +4,17 @@ All notable changes to Omnicord are recorded here. The format follows
 Keep a Changelog, and the project follows semantic versioning. Version
 1.0.0 marked the public launch; releases since follow semver.
 
+## 1.1.1 (2026-07-07)
+
+A live agent-style test of the 1.1.0 tools turned up one defect.
+
+### Fixed
+
+- `forward_message` returned a Discord 400 error when given a note, because
+  Discord does not allow text on a forward itself. The note is now posted as
+  its own message just before the forward, so the content parameter works as
+  described.
+
 ## 1.1.0 (2026-07-07)
 
 Catches Omnicord up to Discord's 2025 and 2026 API additions: native message

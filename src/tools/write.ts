@@ -178,15 +178,16 @@ export function registerWriteTools(
       description:
         "Forward a message from one channel into another, the way the " +
         "Discord client's forward does: the original travels along as a " +
-        "quoted snapshot. Works across channels in the server. Add content " +
-        "to say something alongside it.",
+        "quoted snapshot. Works across channels in the server. An optional " +
+        "note is posted as its own message just before the forward, since " +
+        "Discord does not allow text on the forward itself.",
       inputSchema: {
         guild: guildParam,
         channel: z.string().describe("Channel to forward the message into (name or ID)."),
         from_channel: z.string().describe("Channel the message is currently in (name or ID)."),
         message_id: z.string().describe("ID of the message to forward."),
         content: z.string().max(2000).optional()
-          .describe("Optional note to send alongside the forward."),
+          .describe("Optional note, posted as a separate message just before the forward."),
       },
       annotations: { readOnlyHint: false, destructiveHint: false },
     },
@@ -208,26 +209,37 @@ export function registerWriteTools(
         `in #${source.name}`
       );
 
-      const body: RESTPostAPIChannelMessageJSONBody = {
-        allowed_mentions: { parse: [] as never },
-        ...(content ? { content } : {}),
-        message_reference: {
-          type: MessageReferenceType.Forward,
-          channel_id: source.id,
-          message_id,
-        },
-      };
+      // Discord rejects content on the forward itself, so a note goes as its
+      // own message just before the forwarded snapshot.
+      let note: APIMessage | undefined;
+      if (content) {
+        note = (await rest.post(Routes.channelMessages(target.id), {
+          body: {
+            content,
+            allowed_mentions: { parse: [] as never },
+          } as RESTPostAPIChannelMessageJSONBody,
+        })) as APIMessage;
+      }
 
       const sent = (await rest.post(Routes.channelMessages(target.id), {
-        body,
+        body: {
+          allowed_mentions: { parse: [] as never },
+          message_reference: {
+            type: MessageReferenceType.Forward,
+            channel_id: source.id,
+            message_id,
+          },
+        } as RESTPostAPIChannelMessageJSONBody,
       })) as APIMessage;
 
       return ok(
-        `Forwarded the message into #${target.name}. Message ID ${sent.id}.`,
+        `Forwarded the message into #${target.name}. Message ID ${sent.id}.` +
+          (note ? " Posted your note with it." : ""),
         {
           id: sent.id,
           channel: { id: target.id, name: target.name },
           from: { id: source.id, name: source.name },
+          note_id: note?.id ?? null,
           jump_link: jumpLink(guildId, target.id, sent.id),
         }
       );

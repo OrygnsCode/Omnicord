@@ -223,7 +223,7 @@ The 15 always-loaded tools. Chosen so that the two headline flows (chat and oper
 | unpin_message | no | Pin Messages | channel, message_id | Unpins. |
 | list_pinned_messages | no | none | channel | Pinned messages with author and date. |
 | crosspost_message | no | Manage Messages | channel, message_id | Publishes an announcement-channel message to followers. |
-| forward_message | no | Send Messages | channel, from_channel, message_id, content | Forwards a message from one channel into another as a quoted snapshot, the way the client's forward does. |
+| forward_message | no | Send Messages | channel, from_channel, message_id, content | Forwards a message from one channel into another as a quoted snapshot, the way the client's forward does. An optional note posts as its own message just before the forward, since Discord does not allow text on a forward. |
 | send_dm | no | none | user, content, embeds[] | Direct message to a user who shares a guild with the bot. Fails gracefully when DMs are closed. |
 | schedule_message | no | Send Messages | channel, content, send_at, repeat (none, daily, weekly, cron) | Omnicord-side scheduler. Survives restarts. |
 | list_scheduled_messages | no | none | guild | Pending scheduled messages. |

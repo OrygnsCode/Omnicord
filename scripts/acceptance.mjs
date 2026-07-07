@@ -293,6 +293,18 @@ try {
     "forward_message forwards a message into another channel"
   );
 
+  const forwardedNote = await callTool("forward_message", {
+    channel: "omnitest-temp",
+    from_channel: "general",
+    message_id: sent.data.id,
+    content: "Reposting for visibility.",
+  });
+  expect(
+    typeof forwardedNote.data?.id === "string" &&
+      typeof forwardedNote.data?.note_id === "string",
+    "forward_message with a note posts both the forward and the note"
+  );
+
   const vcStatus = await callTool("set_voice_channel_status", {
     channel: "General",
     status: "Acceptance run in progress",
