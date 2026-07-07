@@ -71,13 +71,13 @@ is wrong.
 | Area | Examples |
 |---|---|
 | Server building | Plan and execute a full server build from a brief: roles, categories, channels, permissions, in one additive operation. Save, diff, and rebuild layouts as blueprints. |
-| Messaging | Send, edit, pin, react, polls, scheduled messages, DMs, webhooks. |
-| Reading | Channel history, search, members, roles, permissions, audit log. |
-| Moderation | Timeouts, kicks, bans, bulk actions, prune, all preview first. |
-| AutoMod | Discord's server side filters: keyword rules, Discord maintained preset lists (slurs, profanity), spam and mention flood limits. |
+| Messaging | Send, edit, pin, forward, react, polls, scheduled messages, DMs, webhooks. |
+| Reading | Channel history, full-text message search, members, roles, permissions, audit log. |
+| Moderation | Timeouts, kicks, bans, bulk actions, and prune, all preview first, plus raid lockdown to pause invites and DMs. |
+| AutoMod | Discord's server side filters: keyword rules, Discord maintained preset lists (slurs, profanity), member profile checks, spam and mention flood limits. |
 | Real time | Subscribe to live server events and ask "what did I miss?" |
-| Structure | Channels, categories, permission overwrites, reordering, cloning. |
-| Community | Events, stages, threads, forums, invites, welcome screen, onboarding. |
+| Structure | Channels, categories, permission overwrites, reordering, cloning, voice channel status. |
+| Community | Events (one-off or recurring), stages, threads, forums, invites, welcome screen, onboarding. |
 | Expression | Emojis, stickers, soundboard sounds. |
 | Diagnostics | Setup check, bot info, rate limit status, permission explainers. |
 
@@ -183,7 +183,7 @@ environment variable overrides all of them.
 | [Troubleshooting](docs/troubleshooting.md) | Common problems and their fixes. |
 | [Security whitepaper](docs/security-whitepaper.md) | Plain language: what Omnicord can and cannot touch, for whoever decides whether to install it. |
 | [SECURITY.md](SECURITY.md) | The engineering level threat model and audit findings. |
-| [Tool catalog](docs/tool-catalog.md) | The full contract of all 148 tools. |
+| [Tool catalog](docs/tool-catalog.md) | The full contract of all 151 tools. |
 
 The docs are written to be read by AI assistants too: paste a page at
 your AI and have it walk you through.

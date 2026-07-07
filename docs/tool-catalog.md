@@ -1,12 +1,12 @@
 # Omnicord Tool Catalog
 
-Version: 0.1 (draft)
-Status: design spec, pre-implementation
+Version: 1.1
+Status: shipped; the contract the implementation follows
 Owner: Orygn LLC
 
 This document is the contract for the Omnicord tool surface. Every tool the server exposes is listed here with its tier, destructiveness, required Discord permission, key parameters, and behavior. The implementation and the registry listings derive from this file. Change the contract here first, then change code.
 
-Totals: 148 tools implemented and shipped, 15 in the always-loaded core set and 133 loaded on demand. A few additional tools, notably application-command management, are specified in this contract but deferred and not yet shipped.
+Totals: 151 tools implemented and shipped, 15 in the always-loaded core set and 136 loaded on demand. A few additional tools, notably application-command management, are specified in this contract but deferred and not yet shipped.
 
 ## 1. Design conventions
 
@@ -114,7 +114,6 @@ The server owns rate limit coordination so the model never sees a 429 it could h
 
 ### 1.10 Known API gaps the catalog must be honest about
 
-- Message search: the Discord bot API has no search endpoint. `search_messages` is implemented as a bounded history scan with server-side filtering, and its docs say so. Result completeness depends on the scan window.
 - Pinning: since February 23, 2026 pinning requires the PIN_MESSAGES permission; MANAGE_MESSAGES alone is no longer sufficient. Preflight checks the new permission.
 - Voice audio: joining voice to play or capture audio is out of scope for v1 (it requires a separate UDP voice connection, Opus, and DAVE E2EE as of March 1, 2026). Voice tools in v1 are administrative only. Audio is the planned v2 flagship.
 - Guild creation: `POST /guilds` only works for bots in fewer than 10 guilds. The v1 product targets building out servers the user creates and invites the bot into, which has no such cap. A from-scratch `create_server` tool is deferred and will require a dedicated builder bot.
@@ -163,7 +162,7 @@ The 15 always-loaded tools. Chosen so that the two headline flows (chat and oper
 | sync_server_template | no | Manage Guild | guild, template_code | Re-syncs a template to current guild state. |
 | delete_server_template | yes | Manage Guild | guild, template_code | Deletes a template. |
 
-## 4. Channels and categories (14 tools)
+## 4. Channels and categories (15 tools)
 
 | Tool | D | Requires | Key parameters | Summary |
 |---|---|---|---|---|
@@ -181,6 +180,7 @@ The 15 always-loaded tools. Chosen so that the two headline flows (chat and oper
 | unlock_channel | no | Manage Roles | channel | Restores the state saved by lock_channel. |
 | follow_announcement_channel | no | Manage Webhooks | source_channel, target_channel | Subscribes a channel to an announcement channel. |
 | list_voice_members | no | none | channel | Who is in a voice or stage channel, with mute and deafen state. |
+| set_voice_channel_status | no | Manage Channels | channel, status (up to 500 characters, empty clears) | Sets the live status line shown on a voice channel. This is the status, not the topic. |
 
 ## 5. Threads (8 tools)
 
@@ -208,7 +208,7 @@ The 15 always-loaded tools. Chosen so that the two headline flows (chat and oper
 | update_forum_tag | no | Manage Channels | channel, tag, name, emoji, moderated | Edits a tag. |
 | delete_forum_tag | yes | Manage Channels | channel, tag | Removes a tag from the forum and all posts. |
 
-## 7. Messages (15 tools)
+## 7. Messages (16 tools)
 
 | Tool | D | Requires | Key parameters | Summary |
 |---|---|---|---|---|
@@ -218,11 +218,12 @@ The 15 always-loaded tools. Chosen so that the two headline flows (chat and oper
 | edit_message | no | own messages: none | channel, message_id, content, embeds[], components | Edits a bot-authored message. |
 | delete_message | yes | Manage Messages (others') | channel, message_id, reason | Deletes one message. |
 | bulk_delete_messages | yes | Manage Messages | channel, count or message_ids[], filter (author, contains, has) | Bulk delete up to 100 messages under 14 days old. Dry run returns the exact list. |
-| search_messages * | no | Message Content intent | query, channel, author, after, before, has (link, file, embed), scan_limit | Bounded history scan with filters (see 1.10). Reports how far back it actually searched. |
+| search_messages * | no | Read Message History; Message Content intent | query, channel, author, has (image, video, sound, file, sticker, embed, link, poll, snapshot), pinned, sort (recent, relevant), limit, offset | Full-text search over Discord's server message index. Matches whole words across every channel the bot can read, or one named channel, and looks inside embeds and polls, not just message text. Reports the total match count. |
 | pin_message | no | Pin Messages | channel, message_id | Pins. Preflights the post-Feb-2026 PIN_MESSAGES permission. |
 | unpin_message | no | Pin Messages | channel, message_id | Unpins. |
 | list_pinned_messages | no | none | channel | Pinned messages with author and date. |
 | crosspost_message | no | Manage Messages | channel, message_id | Publishes an announcement-channel message to followers. |
+| forward_message | no | Send Messages | channel, from_channel, message_id, content | Forwards a message from one channel into another as a quoted snapshot, the way the client's forward does. |
 | send_dm | no | none | user, content, embeds[] | Direct message to a user who shares a guild with the bot. Fails gracefully when DMs are closed. |
 | schedule_message | no | Send Messages | channel, content, send_at, repeat (none, daily, weekly, cron) | Omnicord-side scheduler. Survives restarts. |
 | list_scheduled_messages | no | none | guild | Pending scheduled messages. |
@@ -267,7 +268,7 @@ The 15 always-loaded tools. Chosen so that the two headline flows (chat and oper
 | disconnect_member | yes | Move Members | member, reason | Kicks a member out of voice. |
 | prune_members | yes | Kick Members + Manage Guild | guild, days_inactive, include_roles[] | Removes inactive members. Dry run uses Discord's native prune-count endpoint for an exact preview. |
 
-## 11. Moderation (11 tools)
+## 11. Moderation (12 tools)
 
 | Tool | D | Requires | Key parameters | Summary |
 |---|---|---|---|---|
@@ -279,9 +280,10 @@ The 15 always-loaded tools. Chosen so that the two headline flows (chat and oper
 | bulk_ban | yes | Ban Members + Manage Guild | user_ids[] (up to 200), reason, delete_message_seconds | Mass ban, for raid cleanup. Dry run lists every target. |
 | list_bans | no | Ban Members | guild, limit, cursor | Current bans with reasons. |
 | list_automod_rules | no | Manage Guild | guild | AutoMod rules, triggers, and actions, summarized. |
-| create_automod_rule | no | Manage Guild | guild, name, trigger (keyword, keyword_preset, spam, mention_spam), keywords[], regex_patterns[], presets[] (profanity, sexual_content, slurs), allow_list[], mention_limit, actions (block, alert, timeout), alert_channel, timeout_minutes, exempt_roles[], exempt_channels[] | Creates an AutoMod rule. For slur filtering prefer keyword_preset with the slurs preset: Discord maintains the word list. Timeout is not allowed on spam or keyword_preset rules. |
+| create_automod_rule | no | Manage Guild | guild, name, trigger (keyword, keyword_preset, spam, mention_spam, member_profile), keywords[], regex_patterns[], presets[] (profanity, sexual_content, slurs), allow_list[], mention_limit, actions (block, alert, timeout), alert_channel, timeout_minutes, exempt_roles[], exempt_channels[] | Creates an AutoMod rule. For slur filtering prefer keyword_preset with the slurs preset: Discord maintains the word list. member_profile scans usernames, nicknames, and bios instead of messages and needs a Community server; its block quarantines the member. Timeout is not allowed on spam, keyword_preset, or member_profile rules. |
 | update_automod_rule | no | Manage Guild | rule, same fields as create | Edits a rule. |
 | delete_automod_rule | yes | Manage Guild | rule | Deletes a rule. |
+| set_incident_actions | no | Manage Server | guild, invites (hours to pause, 0 to resume), dms (hours to pause, 0 to resume) | Pauses new invites and DMs between non-friend members for up to 24 hours each, Discord's raid-defense security actions. No arguments reports the current state and any raid Discord detected on its own. |
 
 ## 12. Invites (4 tools)
 
@@ -307,15 +309,15 @@ The 15 always-loaded tools. Chosen so that the two headline flows (chat and oper
 | Tool | D | Requires | Key parameters | Summary |
 |---|---|---|---|---|
 | list_emojis | no | none | guild | Custom emojis with usage hints. |
-| create_emoji | no | Manage Expressions | guild, name, image (URL or file) | Uploads a custom emoji. |
+| create_emoji | no | Create Expressions | guild, name, image (URL or file) | Uploads a custom emoji. |
 | update_emoji | no | Manage Expressions | emoji, name, roles[] | Renames or role-restricts an emoji. |
 | delete_emoji | yes | Manage Expressions | emoji | Deletes an emoji. |
 | list_stickers | no | none | guild | Custom stickers. |
-| create_sticker | no | Manage Expressions | guild, name, description, tags, file | Uploads a sticker. |
+| create_sticker | no | Create Expressions | guild, name, description, tags, file | Uploads a sticker. |
 | update_sticker | no | Manage Expressions | sticker, name, description, tags | Edits sticker metadata. |
 | delete_sticker | yes | Manage Expressions | sticker | Deletes a sticker. |
 | list_soundboard_sounds | no | none | guild | Soundboard sounds with volume and emoji. |
-| create_soundboard_sound | no | Manage Expressions | guild, name, sound (file), volume, emoji | Uploads a soundboard sound. |
+| create_soundboard_sound | no | Create Expressions | guild, name, sound (file), volume, emoji | Uploads a soundboard sound. |
 | update_soundboard_sound | no | Manage Expressions | sound, name, volume, emoji | Edits a sound. |
 | delete_soundboard_sound | yes | Manage Expressions | sound | Deletes a sound. |
 
@@ -325,7 +327,7 @@ The 15 always-loaded tools. Chosen so that the two headline flows (chat and oper
 |---|---|---|---|---|
 | list_events | no | none | guild | Upcoming events with type, time, and interest counts. |
 | get_event | no | none | event | One event in detail. |
-| create_event | no | Manage Events | guild, name, description, type (voice, stage, external), channel or location, start_time, end_time, image | Creates a scheduled event. |
+| create_event | no | Create Events | guild, name, description, type (voice, stage, external), channel or location, start_time, end_time, repeat (daily, weekly, biweekly, monthly), image | Creates a scheduled event, optionally recurring. |
 | update_event | no | Manage Events | event, same fields as create, status | Edits or starts an event. |
 | cancel_event | yes | Manage Events | event | Cancels an event. |
 | get_event_attendees | no | none | event, limit | Users marked interested. |
@@ -402,4 +404,3 @@ Real-time gateway events surfaced through MCP. No notable competitor ships this.
 ## 22. Open questions
 
 1. Blueprint schema versioning: semver the format, or stay loose for now.
-2. Whether `search_messages` should maintain an opt-in local index for guilds that grant Message Content, to make search fast and honest about coverage.

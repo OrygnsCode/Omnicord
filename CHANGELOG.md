@@ -4,6 +4,48 @@ All notable changes to Omnicord are recorded here. The format follows
 Keep a Changelog, and the project follows semantic versioning. Version
 1.0.0 marked the public launch; releases since follow semver.
 
+## 1.1.0 (2026-07-07)
+
+Catches Omnicord up to Discord's 2025 and 2026 API additions: native message
+search, recurring events, raid-defense controls, message forwarding, voice
+channel status, and profile-scanning AutoMod. Also fixes a permission
+regression that stopped the recommended invite from creating events and
+expressions.
+
+### Added
+
+- `set_incident_actions`: pauses new invites and DMs between non-friend
+  members for up to 24 hours each, Discord's raid-defense security actions.
+  With no arguments it reports the current state and any raid Discord flagged
+  on its own.
+- `forward_message`: forwards a message from one channel into another as a
+  quoted snapshot, the way the Discord client's forward does.
+- `set_voice_channel_status`: sets or clears the live status line on a voice
+  channel, up to 500 characters.
+- `create_event` gains `repeat` (daily, weekly, biweekly, monthly) for
+  recurring events, and the event digest now reports an event's recurrence.
+- `create_automod_rule` gains the `member_profile` trigger, which scans
+  usernames, nicknames, and bios instead of message content. It needs a
+  Community server, and its block quarantines the member.
+
+### Changed
+
+- `search_messages` now uses Discord's guild message search index instead of
+  a bounded history scan. It searches the whole server, or one named channel,
+  matches whole words, reads inside embeds and polls, and reports the total
+  match count. New filters cover the author, the content type (image, link,
+  file, poll, and so on), and pinned state, with recent or relevance sorting
+  and paging.
+
+### Fixed
+
+- Creating scheduled events and expressions used the older Manage
+  permissions, but since February 23, 2026 Discord requires Create Events and
+  Create Expressions. `create_event` and `create_emoji` now request the
+  Create permissions, and both are added to the recommended invite, so a bot
+  invited that way can create events, emoji, stickers, and soundboard sounds
+  again.
+
 ## 1.0.3 (2026-06-25)
 
 Setup wizard improvements and a moderation message fix, both found
