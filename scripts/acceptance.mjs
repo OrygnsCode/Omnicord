@@ -283,6 +283,27 @@ try {
   });
   expect(typeof inNew.data?.id === "string", "fresh channel accepts messages");
 
+  const forwarded = await callTool("forward_message", {
+    channel: "omnitest-temp",
+    from_channel: "general",
+    message_id: sent.data.id,
+  });
+  expect(
+    typeof forwarded.data?.id === "string",
+    "forward_message forwards a message into another channel"
+  );
+
+  const vcStatus = await callTool("set_voice_channel_status", {
+    channel: "General",
+    status: "Acceptance run in progress",
+  });
+  expect(vcStatus.data?.status === "Acceptance run in progress", "voice channel status sets");
+  const vcClear = await callTool("set_voice_channel_status", {
+    channel: "General",
+    status: "",
+  });
+  expect(vcClear.data?.status === null, "voice channel status clears");
+
   const newRole = await callTool("create_role", {
     name: "omnitest-role",
     preset: "member",

@@ -619,4 +619,47 @@ export function registerManageTools(
       });
     })
   );
+
+  server.registerTool(
+    "set_voice_channel_status",
+    {
+      title: "Set voice channel status",
+      description:
+        "Set the short status line shown on a voice channel, a note about " +
+        "what is happening in it right now, up to 500 characters. Pass an " +
+        "empty status to clear it. This is the live status, not the topic.",
+      inputSchema: {
+        channel: z.string().describe("Voice channel name or ID."),
+        guild: guildParam,
+        status: z.string().max(500).describe("Status text. Empty clears it."),
+      },
+      annotations: { readOnlyHint: false, destructiveHint: false },
+    },
+    guarded(async ({ channel, guild, status }) => {
+      const { rest, guildId } = await enter(config, guild);
+      const target = await resolveChannel(rest, guildId, channel, [2]);
+
+      const perms = await botPermissions(rest, guildId, target);
+      requirePermissions(
+        perms,
+        [[P.ManageChannels, "Manage Channels"]],
+        `in #${target.name}`
+      );
+
+      const clean = status.trim();
+      await rest.put(`/channels/${target.id}/voice-status`, {
+        body: { status: clean.length ? clean : null },
+      });
+
+      return ok(
+        clean.length
+          ? `Set the status of #${target.name} to "${clean}".`
+          : `Cleared the status of #${target.name}.`,
+        {
+          channel: { id: target.id, name: target.name },
+          status: clean.length ? clean : null,
+        }
+      );
+    })
+  );
 }

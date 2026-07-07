@@ -102,6 +102,8 @@ try {
   assert(names.includes("get_bot_info"), "get_bot_info is registered");
   assert(names.includes("run_setup_check"), "run_setup_check is registered");
   assert(names.includes("send_message"), "send_message is registered");
+  assert(names.includes("forward_message"), "forward_message is registered");
+  assert(names.includes("set_voice_channel_status"), "set_voice_channel_status is registered");
   assert(names.includes("delete_message"), "delete_message is registered");
   assert(names.includes("plan_server_build"), "plan_server_build is registered");
   assert(names.includes("execute_build_plan"), "execute_build_plan is registered");
@@ -167,7 +169,7 @@ try {
   ]) {
     assert(names.includes(t), `${t} is registered`);
   }
-  assert(names.length >= 149, `tool count is at least 149 (got ${names.length})`);
+  assert(names.length >= 151, `tool count is at least 151 (got ${names.length})`);
 
   async function callTool(name, args) {
     const res = await request("tools/call", { name, arguments: args });

@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { Routes, PermissionFlagsBits } from "discord-api-types/v10";
+import { Routes, PermissionFlagsBits, MessageReferenceType } from "discord-api-types/v10";
 import type {
   APIGuildMember,
   APIMessage,
@@ -165,6 +165,69 @@ export function registerWriteTools(
         {
           id: sent.id,
           channel: { id: target.id, name: target.name },
+          jump_link: jumpLink(guildId, target.id, sent.id),
+        }
+      );
+    })
+  );
+
+  server.registerTool(
+    "forward_message",
+    {
+      title: "Forward message",
+      description:
+        "Forward a message from one channel into another, the way the " +
+        "Discord client's forward does: the original travels along as a " +
+        "quoted snapshot. Works across channels in the server. Add content " +
+        "to say something alongside it.",
+      inputSchema: {
+        guild: guildParam,
+        channel: z.string().describe("Channel to forward the message into (name or ID)."),
+        from_channel: z.string().describe("Channel the message is currently in (name or ID)."),
+        message_id: z.string().describe("ID of the message to forward."),
+        content: z.string().max(2000).optional()
+          .describe("Optional note to send alongside the forward."),
+      },
+      annotations: { readOnlyHint: false, destructiveHint: false },
+    },
+    guarded(async ({ guild, channel, from_channel, message_id, content }) => {
+      const { rest, guildId } = await enter(config, guild);
+      const target = await resolveChannel(rest, guildId, channel, TEXT_BEARING_TYPES);
+      const source = await resolveChannel(rest, guildId, from_channel, TEXT_BEARING_TYPES);
+
+      const targetPerms = await botPermissions(rest, guildId, target);
+      requirePermissions(
+        targetPerms,
+        [[P.ViewChannel, "View Channel"], [P.SendMessages, "Send Messages"]],
+        `in #${target.name}`
+      );
+      const sourcePerms = await botPermissions(rest, guildId, source);
+      requirePermissions(
+        sourcePerms,
+        [[P.ViewChannel, "View Channel"], [P.ReadMessageHistory, "Read Message History"]],
+        `in #${source.name}`
+      );
+
+      const body: RESTPostAPIChannelMessageJSONBody = {
+        allowed_mentions: { parse: [] as never },
+        ...(content ? { content } : {}),
+        message_reference: {
+          type: MessageReferenceType.Forward,
+          channel_id: source.id,
+          message_id,
+        },
+      };
+
+      const sent = (await rest.post(Routes.channelMessages(target.id), {
+        body,
+      })) as APIMessage;
+
+      return ok(
+        `Forwarded the message into #${target.name}. Message ID ${sent.id}.`,
+        {
+          id: sent.id,
+          channel: { id: target.id, name: target.name },
+          from: { id: source.id, name: source.name },
           jump_link: jumpLink(guildId, target.id, sent.id),
         }
       );
