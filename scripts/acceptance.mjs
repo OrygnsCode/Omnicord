@@ -650,6 +650,28 @@ try {
   const badAction = await callToolRaw("get_audit_log", { action: "made_up_event" });
   expect(badAction.isError === true, "unknown audit action name is rejected with the valid list");
 
+  // Incident actions: pause invites briefly, read the report, then resume.
+  // Reversible and auto-expiring, so this leaves the server unlocked.
+  const paused = await callTool("set_incident_actions", { invites: 1 });
+  expect(
+    typeof paused.data?.incidents?.invites_paused_until === "string",
+    "pausing invites returns a resume time"
+  );
+  expect(
+    paused.data?.incidents?.dms_paused_until === null,
+    "pausing invites leaves DMs untouched"
+  );
+  const incidentReport = await callTool("set_incident_actions", {});
+  expect(
+    typeof incidentReport.data?.incidents?.invites_paused_until === "string",
+    "a no-argument call reports the current pause"
+  );
+  const resumed = await callTool("set_incident_actions", { invites: 0 });
+  expect(
+    resumed.data?.incidents?.invites_paused_until === null,
+    "resuming invites clears the pause"
+  );
+
   // Engagement batch: reactions, polls, emojis, invites, webhooks, and
   // scheduled events, all created and removed within the run.
 

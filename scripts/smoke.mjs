@@ -109,6 +109,7 @@ try {
   assert(names.includes("pin_message"), "pin_message is registered");
   assert(names.includes("ban_member"), "ban_member is registered");
   assert(names.includes("get_audit_log"), "get_audit_log is registered");
+  assert(names.includes("set_incident_actions"), "set_incident_actions is registered");
   assert(names.includes("add_reactions"), "add_reactions is registered");
   assert(names.includes("create_poll"), "create_poll is registered");
   assert(names.includes("create_invite"), "create_invite is registered");
@@ -166,7 +167,7 @@ try {
   ]) {
     assert(names.includes(t), `${t} is registered`);
   }
-  assert(names.length >= 148, `tool count is at least 148 (got ${names.length})`);
+  assert(names.length >= 149, `tool count is at least 149 (got ${names.length})`);
 
   async function callTool(name, args) {
     const res = await request("tools/call", { name, arguments: args });

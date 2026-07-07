@@ -7,6 +7,7 @@ import {
 import type {
   APIGuild,
   APIGuildMember,
+  APIIncidentsData,
   RESTGetAPIAuditLogResult,
   RESTGetAPIGuildBansResult,
   RESTPostAPIGuildBulkBanResult,
@@ -29,6 +30,7 @@ import {
   memberDisplayName,
   ToolProblem,
   requirePermissions,
+  botPermissions,
 } from "./common.js";
 
 // Moderation tools. Every punitive action (timeout, kick, ban, bulk ban)
@@ -607,6 +609,110 @@ export function registerModerationTools(
           ", newest first.",
         { entries }
       );
+    })
+  );
+
+  server.registerTool(
+    "set_incident_actions",
+    {
+      title: "Pause invites and DMs",
+      description:
+        "Discord's raid-defense security actions for the whole server. Pause " +
+        "new invites, and pause DMs between members who are not friends, each " +
+        "for up to 24 hours, to lock the server down during a raid. Give a " +
+        "number of hours to pause, 0 to lift a pause, or omit a field to leave " +
+        "it unchanged. Called with neither field, it reports the current " +
+        "state, including any raid or DM spam Discord detected on its own.",
+      inputSchema: {
+        guild: guildParam,
+        invites: z.number().min(0).max(24).optional()
+          .describe(
+            "Hours to pause new invites, up to 24. Use 0 to resume invites, " +
+              "or omit to leave them unchanged."
+          ),
+        dms: z.number().min(0).max(24).optional()
+          .describe(
+            "Hours to pause DMs between non-friend members, up to 24. Use 0 " +
+              "to resume, or omit to leave them unchanged."
+          ),
+      },
+      annotations: { readOnlyHint: false, destructiveHint: false },
+    },
+    guarded(async ({ guild, invites, dms }) => {
+      const { rest, guildId } = await enter(config, guild);
+
+      const guildData = (await rest.get(Routes.guild(guildId))) as APIGuild;
+      const current: APIIncidentsData = guildData.incidents_data ?? {
+        invites_disabled_until: null,
+        dms_disabled_until: null,
+      };
+
+      const active = (t?: string | null): boolean =>
+        Boolean(t) && new Date(t as string).getTime() > Date.now();
+
+      const describe = (data: APIIncidentsData): string => {
+        const parts = [
+          active(data.invites_disabled_until)
+            ? `New invites are paused until ${data.invites_disabled_until}.`
+            : "New invites are active.",
+          active(data.dms_disabled_until)
+            ? `DMs between non-friend members are paused until ${data.dms_disabled_until}.`
+            : "Member DMs are active.",
+        ];
+        const flags: string[] = [];
+        if (data.raid_detected_at) flags.push(`a raid at ${data.raid_detected_at}`);
+        if (data.dm_spam_detected_at)
+          flags.push(`DM spam at ${data.dm_spam_detected_at}`);
+        if (flags.length) parts.push(`Discord flagged ${flags.join(" and ")}.`);
+        return parts.join(" ");
+      };
+
+      const digest = (data: APIIncidentsData) => ({
+        invites_paused_until: data.invites_disabled_until,
+        dms_paused_until: data.dms_disabled_until,
+        raid_detected_at: data.raid_detected_at ?? null,
+        dm_spam_detected_at: data.dm_spam_detected_at ?? null,
+      });
+
+      // Neither field given: report the current posture and change nothing.
+      if (invites === undefined && dms === undefined) {
+        return ok(describe(current), { incidents: digest(current) });
+      }
+
+      const perms = await botPermissions(rest, guildId);
+      requirePermissions(perms, [[P.ManageGuild, "Manage Server"]], "in this server");
+
+      // A duration becomes a timestamp, kept a minute clear of Discord's hard
+      // 24 hour ceiling. An omitted field keeps a still-future pause; 0 lifts it.
+      const hardCapMs = Date.now() + 24 * 3600_000 - 60_000;
+      const resolve = (
+        hours: number | undefined,
+        currentValue: string | null
+      ): string | null => {
+        if (hours === undefined) return active(currentValue) ? currentValue : null;
+        if (hours === 0) return null;
+        const requestedMs = Date.now() + hours * 3600_000;
+        return new Date(Math.min(requestedMs, hardCapMs)).toISOString();
+      };
+
+      const body = {
+        invites_disabled_until: resolve(invites, current.invites_disabled_until),
+        dms_disabled_until: resolve(dms, current.dms_disabled_until),
+      };
+
+      const result = (await rest.put(Routes.guildIncidentActions(guildId), {
+        body,
+      })) as APIIncidentsData;
+
+      // The PUT response omits Discord's detection fields, so keep them from
+      // the guild read to leave the report complete.
+      const merged: APIIncidentsData = {
+        invites_disabled_until: result.invites_disabled_until,
+        dms_disabled_until: result.dms_disabled_until,
+        raid_detected_at: current.raid_detected_at,
+        dm_spam_detected_at: current.dm_spam_detected_at,
+      };
+      return ok(describe(merged), { incidents: digest(merged) });
     })
   );
 }
