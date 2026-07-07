@@ -141,16 +141,19 @@ export function registerAutomodTools(
         "Create a server-side moderation rule that runs on Discord's own " +
         "infrastructure: Discord-maintained preset word lists (slurs, " +
         "profanity, sexual content), custom keyword filters (with optional " +
-        "regex), spam detection, or mention-flood limits. For slur or " +
+        "regex), spam detection, mention-flood limits, or member_profile " +
+        "checks on usernames, nicknames, and bios (Community servers only). " +
+        "For slur or " +
         "hate-speech filtering prefer trigger keyword_preset with the " +
         "slurs preset: Discord maintains the word list, so none needs to " +
         "be written. Actions: block the message, alert a channel, and/or " +
-        "time the sender out (timeout is not available on spam or " +
-        "keyword_preset rules).",
+        "time the sender out (timeout is not available on spam, " +
+        "keyword_preset, or member_profile rules). On member_profile rules " +
+        "block quarantines the member until they fix their profile.",
       inputSchema: {
         guild: guildParam,
         name: z.string().min(1).max(100),
-        trigger: z.enum(["keyword", "keyword_preset", "spam", "mention_spam"]),
+        trigger: z.enum(["keyword", "keyword_preset", "spam", "mention_spam", "member_profile"]),
         keywords: z.array(z.string().max(60)).max(1000).optional()
           .describe("For keyword rules. Wildcards: word* matches prefixes."),
         regex_patterns: z.array(z.string().max(260)).max(10).optional()
@@ -215,6 +218,12 @@ export function registerAutomodTools(
       if (trigger === "mention_spam" && !mention_limit) {
         return fail("mention_spam rules need a mention_limit.");
       }
+      if (trigger === "member_profile" && !keywords?.length && !regex_patterns?.length) {
+        return fail(
+          "member_profile rules need keywords or regex_patterns to match " +
+            "against member profiles."
+        );
+      }
       if (actions.includes("alert") && !alert_channel) {
         return fail("The alert action needs an alert_channel.");
       }
@@ -230,11 +239,22 @@ export function registerAutomodTools(
             "use block and/or alert."
         );
       }
+      if (actions.includes("timeout") && trigger === "member_profile") {
+        return fail(
+          "Discord does not allow timeout on member_profile rules; use block " +
+            "to quarantine the member, or alert."
+        );
+      }
 
       const builtActions: Array<Record<string, unknown>> = [];
       for (const action of actions) {
         if (action === "block") {
-          builtActions.push({ type: AutoModerationActionType.BlockMessage });
+          builtActions.push({
+            type:
+              trigger === "member_profile"
+                ? AutoModerationActionType.BlockMemberInteraction
+                : AutoModerationActionType.BlockMessage,
+          });
         } else if (action === "alert") {
           const channel = await resolveChannel(
             rest,
@@ -261,12 +281,17 @@ export function registerAutomodTools(
             ? AutoModerationRuleTriggerType.KeywordPreset
             : trigger === "spam"
               ? AutoModerationRuleTriggerType.Spam
-              : AutoModerationRuleTriggerType.MentionSpam;
+              : trigger === "mention_spam"
+                ? AutoModerationRuleTriggerType.MentionSpam
+                : AutoModerationRuleTriggerType.MemberProfile;
 
       const rule = (await rest.post(Routes.guildAutoModerationRules(guildId), {
         body: {
           name,
-          event_type: AutoModerationRuleEventType.MessageSend,
+          event_type:
+            trigger === "member_profile"
+              ? AutoModerationRuleEventType.MemberUpdate
+              : AutoModerationRuleEventType.MessageSend,
           trigger_type: triggerType,
           trigger_metadata: {
             ...(keywords?.length ? { keyword_filter: keywords } : {}),

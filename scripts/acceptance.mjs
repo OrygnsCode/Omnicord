@@ -867,6 +867,19 @@ try {
   });
   expect(typeof voiceEvent.data?.id === "string", "voice event schedules with channel resolution");
 
+  const recurringEvent = await callTool("create_event", {
+    name: "omnitest-recurring-event",
+    type: "external",
+    start_time: startAt,
+    end_time: endAt,
+    location: "The Void",
+    repeat: "weekly",
+  });
+  expect(
+    recurringEvent.data?.recurrence?.frequency === "weekly",
+    "recurring event carries a weekly recurrence rule"
+  );
+
   const eventList = await callTool("list_events");
   expect((eventList.data?.events ?? []).length >= 2, "both events listed");
 
@@ -891,7 +904,7 @@ try {
   });
   expect(pastEvent.isError === true, "past start time is rejected");
 
-  for (const name of ["omnitest-external-event", "omnitest-voice-event"]) {
+  for (const name of ["omnitest-external-event", "omnitest-voice-event", "omnitest-recurring-event"]) {
     const gate = await callTool("cancel_event", { event: name });
     const canceled = await callTool("cancel_event", {
       event: name,
@@ -1303,6 +1316,16 @@ try {
     type: "announcement",
   });
   expect(typeof announceChan.data?.id === "string", "announcement channel creates on a Community server");
+
+  const mpRule = await callTool("create_automod_rule", {
+    name: "omnitest-mp-rule",
+    trigger: "member_profile",
+    keywords: ["zzqqxx"],
+    actions: ["block"],
+  });
+  expect(mpRule.isError !== true, "member_profile automod rule creates on a Community server");
+  const mpDeleted = await deleteViaTool("delete_automod_rule", "rule", "omnitest-mp-rule");
+  expect(mpDeleted.data?.deleted === true, "member_profile rule deletes");
 
   const welcomeSet = await callTool("update_welcome_screen", {
     enabled: true,

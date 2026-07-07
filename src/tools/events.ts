@@ -5,6 +5,8 @@ import {
   GuildScheduledEventEntityType,
   GuildScheduledEventStatus,
   GuildScheduledEventPrivacyLevel,
+  GuildScheduledEventRecurrenceRuleFrequency,
+  GuildScheduledEventRecurrenceRuleWeekday,
 } from "discord-api-types/v10";
 import type {
   APIGuildScheduledEvent,
@@ -43,7 +45,15 @@ const TYPE_LABELS: Record<number, string> = {
   3: "external",
 };
 
+const RECURRENCE_FREQ: Record<number, string> = {
+  0: "yearly",
+  1: "monthly",
+  2: "weekly",
+  3: "daily",
+};
+
 function eventDigest(e: APIGuildScheduledEvent) {
+  const rule = e.recurrence_rule;
   return {
     id: e.id,
     name: e.name,
@@ -55,6 +65,12 @@ function eventDigest(e: APIGuildScheduledEvent) {
     location: e.entity_metadata?.location ?? null,
     interested: e.user_count ?? 0,
     description: e.description ?? null,
+    recurrence: rule
+      ? {
+          frequency: RECURRENCE_FREQ[rule.frequency] ?? `freq ${rule.frequency}`,
+          interval: rule.interval,
+        }
+      : null,
   };
 }
 
@@ -164,6 +180,11 @@ export function registerEventTools(
         location: z.string().max(100).optional()
           .describe("Where an external event happens."),
         description: z.string().max(1000).optional(),
+        repeat: z.enum(["daily", "weekly", "biweekly", "monthly"]).optional()
+          .describe(
+            "Repeat the event. weekly and biweekly recur on the start's " +
+              "weekday; monthly recurs on the same weekday and week of the month."
+          ),
       },
       annotations: { readOnlyHint: false, destructiveHint: false },
     },
@@ -176,6 +197,7 @@ export function registerEventTools(
       channel,
       location,
       description,
+      repeat,
     }) => {
       const { rest, guildId } = await enter(config, guild);
 
@@ -218,13 +240,51 @@ export function registerEventTools(
         if (end_time) body.scheduled_end_time = parseWhen(end_time, "end_time");
       }
 
+      if (repeat) {
+        const startDate = new Date(start);
+        const weekday = ((startDate.getUTCDay() + 6) % 7) as
+          GuildScheduledEventRecurrenceRuleWeekday; // Discord runs Monday=0..Sunday=6
+        const F = GuildScheduledEventRecurrenceRuleFrequency;
+        const base = {
+          start,
+          end: null,
+          interval: 1,
+          by_weekday: null,
+          by_n_weekday: null,
+          by_month: null,
+          by_month_day: null,
+          by_year_day: null,
+          count: null,
+        };
+        if (repeat === "daily") {
+          body.recurrence_rule = { ...base, frequency: F.Daily };
+        } else if (repeat === "monthly") {
+          const nth = (Math.floor((startDate.getUTCDate() - 1) / 7) + 1) as
+            1 | 2 | 3 | 4 | 5;
+          body.recurrence_rule = {
+            ...base,
+            frequency: F.Monthly,
+            by_n_weekday: [{ n: nth, day: weekday }],
+          };
+        } else {
+          body.recurrence_rule = {
+            ...base,
+            frequency: F.Weekly,
+            interval: repeat === "biweekly" ? 2 : 1,
+            by_weekday: [weekday],
+          };
+        }
+      }
+
       const created = (await rest.post(Routes.guildScheduledEvents(guildId), {
         body,
         reason: "Created via Omnicord",
       })) as APIGuildScheduledEvent;
 
       return ok(
-        `Scheduled "${created.name}" (${type}) for ${created.scheduled_start_time}.`,
+        `Scheduled "${created.name}" (${type})` +
+          (repeat ? `, repeating ${repeat},` : "") +
+          ` for ${created.scheduled_start_time}.`,
         eventDigest(created),
         warnings
       );
