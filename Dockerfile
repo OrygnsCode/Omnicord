@@ -3,14 +3,14 @@
 # without OMNICORD_HTTP_TOKEN, so a container with no token set fails
 # fast with a clear message instead of exposing the bot.
 
-FROM node:22-alpine AS build
+FROM node:26-alpine AS build
 WORKDIR /app
 COPY package.json package-lock.json tsconfig.json ./
 RUN npm ci
 COPY src ./src
 RUN npm run build && npm prune --omit=dev
 
-FROM node:22-alpine
+FROM node:26-alpine
 RUN addgroup -S omnicord && adduser -S omnicord -G omnicord
 WORKDIR /app
 ENV NODE_ENV=production \
