@@ -4,6 +4,27 @@ All notable changes to Omnicord are recorded here. The format follows
 Keep a Changelog, and the project follows semantic versioning. Version
 1.0.0 marked the public launch; releases since follow semver.
 
+## 1.1.2 (2026-07-12)
+
+A dependency release. No tool changes and no behavior changes.
+
+### Security
+
+- `undici` now resolves to 6.27.0 through an npm override. `@discordjs/rest`
+  depends on exactly 6.24.1, which carries four published advisories, one of
+  them high, and ships no upgrade of its own that moves off it. None of the
+  four were reachable from Omnicord. The high one is a denial of service in
+  undici's WebSocket client, and Omnicord's gateway runs on `ws` instead. The
+  other three need a hostile HTTP peer, and Omnicord only ever talks to
+  discord.com over TLS. They were still reported by every audit and dependency
+  scanner pointed at the project, so this removes them rather than explaining
+  them away. A production `npm audit` now reports zero vulnerabilities.
+
+  The newer client is verified against live Discord, not just assumed
+  compatible. The acceptance suite passes in full, including the multipart
+  uploads behind emojis, stickers, and soundboard sounds, which is the surface
+  a change of HTTP client is most likely to disturb.
+
 ## 1.1.1 (2026-07-07)
 
 A live agent-style test of the 1.1.0 tools turned up one defect.

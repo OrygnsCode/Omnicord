@@ -78,7 +78,15 @@ no rug-pull surface.
 
 Dependencies are few and first-party where it matters: the official MCP
 SDK and the official discord.js REST and gateway libraries. `npm audit`
-reports zero vulnerabilities. The published package contains only the
+against the production tree reports zero vulnerabilities, and that is
+held rather than assumed: `@discordjs/rest` depends on an exact `undici`
+6.24.1 that has since drawn four advisories, so an npm override carries
+`undici` forward to 6.27.0, which clears all four. The bumped HTTP client
+is verified against live Discord by the acceptance suite rather than
+taken on trust. Advisories that surface in transitive dependencies are
+resolved this way, not annotated as unreachable and left in place.
+
+The published package contains only the
 compiled `dist` output, the README, the LICENSE, and package.json,
 verified by inspecting the packed tarball; no source, scripts, or `.env`
 ship. The Docker image runs as a
