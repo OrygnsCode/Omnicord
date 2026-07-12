@@ -1,0 +1,41 @@
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: '/'
+    schedule:
+      interval: monthly
+      time: '09:00'
+      timezone: 'America/Chicago'
+    open-pull-requests-limit: 10
+    groups:
+      # Majors are deliberately excluded from the grouped PRs. A single breaking
+      # major (a compiler bump, say) otherwise fails the whole group and blocks
+      # the routine minor and patch updates riding along with it.
+      development-dependencies:
+        dependency-type: development
+        update-types:
+          - minor
+          - patch
+      production-minor-and-patch:
+        dependency-type: production
+        update-types:
+          - minor
+          - patch
+    labels:
+      - dependencies
+
+  - package-ecosystem: github-actions
+    directory: '/'
+    schedule:
+      interval: monthly
+    labels:
+      - dependencies
+      - github-actions
+
+  - package-ecosystem: docker
+    directory: '/'
+    schedule:
+      interval: monthly
+    labels:
+      - dependencies
+      - docker

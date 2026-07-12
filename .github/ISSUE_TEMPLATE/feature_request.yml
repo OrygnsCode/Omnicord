@@ -1,0 +1,59 @@
+name: Feature request
+description: Suggest a tool or a change to an existing one
+title: '[Feature] '
+labels: ['enhancement', 'triage']
+body:
+  - type: markdown
+    attributes:
+      value: |
+        The tool surface is documented in docs/tool-catalog.md. Please check
+        whether the capability already exists there before filing.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: What are you trying to do?
+      description: >
+        Describe the goal, not the implementation. What would you ask your AI
+        to do, and what stops it today?
+      placeholder: 'I want to ask Claude to ... but there is no tool for it.'
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed tool or change
+      description: >
+        If you have a shape in mind, sketch it: the tool name (verb_object), its
+        key parameters, and what it would return.
+    validations:
+      required: true
+
+  - type: dropdown
+    id: destructive
+    attributes:
+      label: Would this delete content, remove access, punish a member, or fan out a bulk change?
+      description: >
+        If yes, it must go through the confirmation gate. See CONTRIBUTING.md.
+      options:
+        - 'No'
+        - 'Yes'
+        - 'Not sure'
+    validations:
+      required: true
+
+  - type: input
+    id: api
+    attributes:
+      label: Discord API support
+      description: >
+        Link the Discord endpoint or feature this relies on, if you know it.
+        Omnicord can only expose what the bot API actually allows.
+      placeholder: 'https://discord.com/developers/docs/resources/...'
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives you considered
+      description: Is there an existing tool that almost does this?

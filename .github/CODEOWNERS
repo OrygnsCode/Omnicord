@@ -1,0 +1,17 @@
+# Default reviewer for everything in the repo.
+*                       @OrygnsCode
+
+# The safety gate and the permission preflight are the security core.
+# Changes here always need a maintainer review.
+/src/safety.ts          @OrygnsCode
+/src/discord/preflight.ts  @OrygnsCode
+/src/http.ts            @OrygnsCode
+/SECURITY.md            @OrygnsCode
+
+# CI, packaging, and release metadata.
+/.github/               @OrygnsCode
+/Dockerfile             @OrygnsCode
+/compose.yaml           @OrygnsCode
+/server.json            @OrygnsCode
+/mcpb/                  @OrygnsCode
+/glama.json             @OrygnsCode

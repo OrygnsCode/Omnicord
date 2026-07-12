@@ -207,6 +207,19 @@ at a disposable test server, and cleans up after itself.
 `scripts/smoke-docker.mjs` builds and verifies the container image and
 needs a running Docker daemon.
 
+The unit and smoke suites need no Discord token, so you can watch the
+confirmation gate block a destructive call, and then let it through only
+with the token, before you trust this server with a bot of your own.
+
+## Contributing
+
+Bug reports and pull requests are welcome.
+[CONTRIBUTING.md](CONTRIBUTING.md) covers the layout, the test suites, the
+conventions, and the one hard rule: any tool that deletes content, removes
+access, punishes a member, or fans a change out across many entities must go
+through the confirmation gate. The project follows the
+[Contributor Covenant](CODE_OF_CONDUCT.md).
+
 ## License
 
 Omnicord is source available under the

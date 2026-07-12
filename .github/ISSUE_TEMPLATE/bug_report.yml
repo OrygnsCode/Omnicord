@@ -1,0 +1,123 @@
+name: Bug report
+description: Report a problem with Omnicord
+title: '[Bug] '
+labels: ['bug', 'triage']
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to file this. Please redact your bot token
+        from anything you paste. If this is a security problem, do not open a
+        public issue: follow SECURITY.md instead.
+
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: A clear description of the bug.
+    validations:
+      required: true
+
+  - type: textarea
+    id: setup-check
+    attributes:
+      label: Output of run_setup_check
+      description: >
+        Ask your AI client to "run a setup check on my Discord bot" and paste
+        the result. This catches most configuration problems (missing intents,
+        an invalid token, the bot not in the guild) before anyone has to guess.
+      render: shell
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Reproduction
+      description: >
+        What did you ask the AI to do, and which tool did it call with what
+        arguments? A minimal case is best.
+      placeholder: |
+        1. Asked Claude: "delete the #old-chat channel"
+        2. It called `delete_channel` with { channel: "old-chat" }
+        3. Observed ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+      description: Include the returned envelope (summary, data, warnings). Redact any token.
+      render: json
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: Omnicord version
+      description: Shown by get_bot_info, or run `npm ls @orygn/omnicord`.
+      placeholder: '1.1.1'
+    validations:
+      required: true
+
+  - type: dropdown
+    id: client
+    attributes:
+      label: MCP client
+      options:
+        - Claude Desktop
+        - Claude Code
+        - Cursor
+        - Windsurf
+        - VS Code
+        - ChatGPT
+        - Other (specify in summary)
+    validations:
+      required: true
+
+  - type: dropdown
+    id: transport
+    attributes:
+      label: Transport
+      options:
+        - stdio (default)
+        - Streamable HTTP (--http)
+        - Docker
+    validations:
+      required: true
+
+  - type: dropdown
+    id: safe-mode
+    attributes:
+      label: Safe mode
+      description: Default is on. Only set OMNICORD_SAFE_MODE=false for trusted automation.
+      options:
+        - 'On (default)'
+        - 'Off (OMNICORD_SAFE_MODE=false)'
+    validations:
+      required: true
+
+  - type: input
+    id: os
+    attributes:
+      label: Operating system
+      placeholder: 'macOS 15.2 / Ubuntu 24.04 / Windows 11'
+    validations:
+      required: true
+
+  - type: textarea
+    id: extra
+    attributes:
+      label: Anything else
+      description: >
+        Relevant stderr output, the bot's role position, or the permissions you
+        invited it with. Redact secrets.
