@@ -1,0 +1,52 @@
+# Smithery configuration for @orygn/omnicord.
+#
+# Distribution model: local stdio MCPB bundle. Smithery distributes the
+# pre-built .mcpb file; clients download and run it locally. The bot token
+# never leaves the user's machine.
+#
+# Publishing:
+#   npx @anthropic-ai/mcpb pack mcpb omnicord.mcpb
+#   npx @smithery/cli mcp publish ./omnicord.mcpb -n @orygn/omnicord
+#
+# See: https://smithery.ai/docs/build/publish
+runtime: typescript
+build:
+  command: npm install && npm run build
+startCommand:
+  type: stdio
+  configSchema:
+    type: object
+    properties:
+      discordToken:
+        type: string
+        title: Discord bot token
+        description: >-
+          From the Discord Developer Portal: your application, the Bot page,
+          Reset Token. Turn on all three Privileged Gateway Intents while you
+          are there. The server still starts without a token, and
+          run_setup_check explains exactly what to fix.
+        format: password
+      guild:
+        type: string
+        title: Default server id
+        description: >-
+          Optional. With it set, tools can omit the server parameter.
+      safeMode:
+        type: boolean
+        title: Safe mode
+        description: >-
+          On by default. Destructive tools return a preview and a single-use
+          confirmation token instead of executing, and only a second call
+          carrying that token goes through. Turn this off only for trusted
+          automation.
+        default: true
+  commandFunction: |-
+    (config) => ({
+      command: 'node',
+      args: ['dist/index.js'],
+      env: {
+        DISCORD_TOKEN: config.discordToken,
+        OMNICORD_GUILD: config.guild,
+        OMNICORD_SAFE_MODE: config.safeMode === false ? 'false' : 'true'
+      }
+    })
