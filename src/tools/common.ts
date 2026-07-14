@@ -171,14 +171,20 @@ export async function enter(
   }
 
   // Each candidate bot's servers, fetched through that bot's own client and
-  // cached per bot.
+  // cached per bot. A bot whose list cannot be fetched (a reset token, a
+  // transient error) contributes no servers rather than breaking routing for
+  // the healthy bots; run_setup_check is where a bad token gets surfaced.
   const botGuilds = await Promise.all(
     candidates.map(async (b) => {
-      const guilds = await getGuildList(getRestForToken(b.token));
-      return {
-        name: b.name,
-        guilds: guilds.map((g) => ({ id: g.id, name: g.name })),
-      };
+      try {
+        const guilds = await getGuildList(getRestForToken(b.token));
+        return {
+          name: b.name,
+          guilds: guilds.map((g) => ({ id: g.id, name: g.name })),
+        };
+      } catch {
+        return { name: b.name, guilds: [] };
+      }
     })
   );
 

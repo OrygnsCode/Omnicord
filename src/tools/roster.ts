@@ -35,13 +35,24 @@ export function registerRosterTools(
       if (config.bots.length === 0) {
         return fail(new NoTokenError().message);
       }
+      // One bad bot (a reset token, a transient error) must not take down the
+      // whole map: fetch each bot's servers independently and mark any that
+      // could not be reached rather than failing the call.
       const perBot = await Promise.all(
         config.bots.map(async (bot) => {
-          const rest = getRestForToken(bot.token);
-          const guilds = (await rest.get(Routes.userGuilds(), {
-            query: new URLSearchParams({ with_counts: "true" }),
-          })) as RESTGetAPICurrentUserGuildsResult;
-          return { bot, guilds };
+          try {
+            const rest = getRestForToken(bot.token);
+            const guilds = (await rest.get(Routes.userGuilds(), {
+              query: new URLSearchParams({ with_counts: "true" }),
+            })) as RESTGetAPICurrentUserGuildsResult;
+            return { bot, guilds, reachable: true };
+          } catch {
+            return {
+              bot,
+              guilds: [] as RESTGetAPICurrentUserGuildsResult,
+              reachable: false,
+            };
+          }
         })
       );
       const servers = perBot.flatMap(({ bot, guilds }) =>
@@ -55,13 +66,30 @@ export function registerRosterTools(
         }))
       );
       const uniqueServers = new Set(servers.map((s) => s.id)).size;
-      const summary =
-        config.bots.length === 1
+      const unreachable = perBot
+        .filter((p) => !p.reachable)
+        .map((p) => p.bot.name);
+      let summary: string;
+      if (config.bots.length === 1) {
+        summary = perBot[0].reachable
           ? `The bot is in ${servers.length} server(s).`
-          : `${config.bots.length} bots across ${uniqueServers} server(s).`;
+          : "The bot could not be reached; check its token with run_setup_check.";
+      } else {
+        summary =
+          `${config.bots.length} bots across ${uniqueServers} server(s).` +
+          (unreachable.length
+            ? ` ${unreachable.length} unreachable (${unreachable.join(", ")}); check them with run_setup_check.`
+            : "");
+      }
       return ok(summary, {
-        bots: config.bots.map((b) => ({ name: b.name, default: b.isDefault })),
+        bots: config.bots.map((b) => ({
+          name: b.name,
+          default: b.isDefault,
+          reachable:
+            perBot.find((p) => p.bot.name === b.name)?.reachable ?? false,
+        })),
         servers,
+        ...(unreachable.length ? { unreachable } : {}),
       });
     })
   );
