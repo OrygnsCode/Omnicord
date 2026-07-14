@@ -1,4 +1,4 @@
-import { DiscordAPIError } from "@discordjs/rest";
+import { DiscordAPIError, type REST } from "@discordjs/rest";
 import { Routes } from "discord-api-types/v10";
 import type {
   RESTGetAPICurrentUserGuildsResult,
@@ -6,10 +6,10 @@ import type {
   RESTGetCurrentApplicationResult,
 } from "discord-api-types/v10";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import type { OmnicordConfig } from "../config.js";
+import type { BotConfig, OmnicordConfig } from "../config.js";
 import { VERSION } from "../config.js";
-import { getRest, NoTokenError } from "../discord/client.js";
 import { ok, fail } from "../envelope.js";
+import { enterBot, botParam, ToolProblem } from "./common.js";
 
 import { readIntents } from "../discord/intents.js";
 import { getGatewayState } from "../discord/gateway.js";
@@ -59,20 +59,23 @@ export function registerDiagnostics(
     {
       title: "Get bot info",
       description:
-        "Identity and status of the connected Discord bot: bot user, " +
+        "Identity and status of a connected Discord bot: bot user, " +
         "application, guild count, enabled gateway intents, and the " +
-        "Omnicord version. Use run_setup_check for a full health check " +
-        "with fix instructions.",
+        "Omnicord version. With more than one bot configured, pass bot to " +
+        "pick which (list_servers shows the configured bots). Use " +
+        "run_setup_check for a full health check with fix instructions.",
+      inputSchema: { bot: botParam },
       annotations: { readOnlyHint: true },
     },
-    async () => {
-      let rest;
+    async ({ bot: botArg }) => {
+      let entered: { rest: REST; bot: BotConfig };
       try {
-        rest = getRest(config);
+        entered = enterBot(config, botArg);
       } catch (err) {
-        if (err instanceof NoTokenError) return fail(err.message);
+        if (err instanceof ToolProblem) return err.result;
         throw err;
       }
+      const { rest, bot: selectedBot } = entered;
 
       try {
         const [user, app, guilds] = await Promise.all([
@@ -104,7 +107,11 @@ export function registerDiagnostics(
             `In ${guildCountDisplay} servers. Intents: ${intentSummary}. ` +
             `Omnicord v${VERSION}.`,
           {
-            bot: { id: user.id, username: user.username },
+            bot: {
+              id: user.id,
+              username: user.username,
+              name: selectedBot.name,
+            },
             application: { id: app.id, name: app.name },
             guilds: {
               count: guildCount,
@@ -135,15 +142,17 @@ export function registerDiagnostics(
         "End-to-end health check of the Omnicord setup: token presence and " +
         "validity, privileged gateway intent toggles, guild count against " +
         "Discord's verification thresholds, and default guild membership. " +
-        "Every failed check comes with instructions for fixing it. Run this " +
+        "Every failed check comes with instructions for fixing it. With more " +
+        "than one bot configured, pass bot to check a specific one. Run this " +
         "first when anything misbehaves.",
+      inputSchema: { bot: botParam },
       annotations: { readOnlyHint: true },
     },
-    async () => {
+    async ({ bot: botArg }) => {
       const checks: SetupCheck[] = [];
 
-      // Check 1: token present.
-      if (!config.token) {
+      // Check 1: a bot is configured.
+      if (config.bots.length === 0) {
         checks.push({
           check: "token_present",
           status: "fail",
@@ -156,15 +165,25 @@ export function registerDiagnostics(
         });
         return finishChecks(checks);
       }
+      let entered: { rest: REST; bot: BotConfig };
+      try {
+        entered = enterBot(config, botArg);
+      } catch (err) {
+        if (err instanceof ToolProblem) return err.result;
+        throw err;
+      }
+      const { rest, bot } = entered;
       checks.push({
         check: "token_present",
         status: "pass",
-        detail: "DISCORD_TOKEN is set.",
+        detail:
+          config.bots.length > 1
+            ? `Checking bot "${bot.name}" of ${config.bots.length} configured.`
+            : "DISCORD_TOKEN is set.",
       });
 
       // Check 2: token valid. A 401 from /users/@me means Discord rejected
       // the token itself.
-      const rest = getRest(config);
       let app: RESTGetCurrentApplicationResult;
       let guilds: RESTGetAPICurrentUserGuildsResult;
       try {

@@ -917,6 +917,22 @@ check(previewSingle.data.acting === undefined, "single-bot preview carries no ac
 check(spend(previewSingle.data.confirm_token, null) === null, "single-bot token spends normally");
 }
 
+// Bot selector for server-less tools (phase 4a).
+{
+const { enterBot } = await import("../dist/tools/common.js");
+const B = (name, token, isDefault = false) => ({ name, token, isDefault });
+const cfg = (bots) => ({ bots, token: bots.find((b) => b.isDefault)?.token, defaultGuild: undefined });
+const caught = (fn) => { try { fn(); return null; } catch (e) { return e?.result ?? null; } };
+
+check(enterBot(cfg([B("main", "t1", true), B("test", "t2")])).bot.name === "main", "enterBot returns the default bot when none is named");
+check(enterBot(cfg([B("main", "t1", true), B("test", "t2")]), "test").bot.name === "test", "enterBot picks a bot by name");
+const client = enterBot(cfg([B("main", "t1", true)])).rest;
+check(client && typeof client.get === "function", "enterBot returns a usable REST client");
+check(caught(() => enterBot(cfg([B("main", "t1", true)]), "ghost")) !== null, "enterBot rejects an unknown bot name with a ToolProblem");
+check(caught(() => enterBot(cfg([]))) !== null, "enterBot rejects when no bots are configured");
+check(caught(() => enterBot(cfg([B("test-a", "t1", true), B("test-b", "t2")]), "test")) !== null, "enterBot rejects an ambiguous bot name");
+}
+
 if (failures > 0) {
   console.error(`\nunit: ${failures} failure(s)`);
   process.exit(1);

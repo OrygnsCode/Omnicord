@@ -38,6 +38,14 @@ export const guildParam = z
   .optional()
   .describe("Guild (server) name or ID. Omit to use the default guild.");
 
+export const botParam = z
+  .string()
+  .optional()
+  .describe(
+    "Which bot to act as, by name, when more than one is configured. Omit " +
+      "to use the default bot."
+  );
+
 // A failure that already knows how to present itself. Thrown by helpers,
 // caught by guarded(), returned to the client as a readable envelope.
 export class ToolProblem extends Error {
@@ -224,6 +232,43 @@ export async function enter(
         )
       );
   }
+}
+
+// Select a bot for operations that are not tied to a server (bot identity,
+// diagnostics). Defaults to the default bot; an explicit name picks another.
+// Throws a ToolProblem when nothing is configured or the name does not resolve.
+export function enterBot(
+  config: OmnicordConfig,
+  botArg?: string
+): { rest: REST; bot: BotConfig } {
+  if (config.bots.length === 0) {
+    throw new ToolProblem(fail(new NoTokenError().message));
+  }
+  let selected = config.bots.find((b) => b.isDefault) ?? config.bots[0];
+  if (botArg) {
+    const picked = resolveBotName(
+      config.bots.map((b) => b.name),
+      botArg
+    );
+    if (picked.kind === "none") {
+      throw new ToolProblem(
+        fail(
+          `No bot named "${botArg}". Configured bots: ` +
+            `${config.bots.map((b) => b.name).join(", ")}.`
+        )
+      );
+    }
+    if (picked.kind === "ambiguous") {
+      throw new ToolProblem(
+        fail(`"${botArg}" matches more than one bot. Use an exact name.`, {
+          candidates: picked.candidates,
+        })
+      );
+    }
+    const found = config.bots.find((b) => b.name === picked.botName);
+    if (found) selected = found;
+  }
+  return { rest: getRestForToken(selected.token), bot: selected };
 }
 
 export async function resolveChannel(
