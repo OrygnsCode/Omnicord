@@ -5,6 +5,8 @@ covers installation from a blank machine, start to finish.
 
 - [Getting started](getting-started.md): from nothing to a working setup,
   with the wizard or by hand.
+- [Multiple bots](multi-bot.md): running several bots, one per server, from
+  a single install.
 - [Connecting AI clients](clients.md): exact configuration for Claude
   Desktop, Claude Code, Cursor, Windsurf, ChatGPT, and any other MCP
   client.

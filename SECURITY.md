@@ -181,6 +181,10 @@ attacking it:
 - Each token is bound to a SHA-256 hash of the exact tool and its resolved
   arguments. A token minted to preview deleting message A cannot be spent
   to delete message B.
+- When more than one bot is configured, the acting bot is folded into that
+  binding, so a token minted for one bot cannot be spent as another, and
+  the preview names the acting bot and server, a wrong-target backstop that
+  surfaces a misrouted action before it runs.
 - Tokens are single use (deleted on redemption) and expire after two
   minutes.
 - Tokens live only in the process that issued them, so one cannot be

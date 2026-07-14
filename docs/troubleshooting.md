@@ -39,6 +39,22 @@ the gateway line. Note that the bot can still do everything over REST even
 when it appears offline; the online dot is presence, not capability. If you
 set `OMNICORD_GATEWAY=off`, the bot is intentionally offline.
 
+## An action went to the wrong bot, or a bot is unreachable
+
+These apply only when you run more than one bot (see
+[Multiple bots](multi-bot.md)).
+
+- Wrong server, or "no bot in that server": Omnicord routes by which bot is
+  a member of the named server. Ask it to "list servers" to see the map of
+  which bot reaches which server. If a server is not listed, no configured
+  bot is in it; invite one, or check the name.
+- Ambiguous: if two of your bots share one server, name the bot to use (for
+  example "as the main bot") so Omnicord does not have to guess.
+- A bot is unreachable: if one bot's token was reset, only that bot stops
+  working, and `list_servers` flags it. Run a setup check on that bot by
+  name ("run a setup check on the test bot") to see what is wrong, then fix
+  its token in `bots.json`.
+
 ## A tool fails with a permissions error
 
 The bot is missing a Discord permission, or its role is too low. Omnicord

@@ -47,6 +47,8 @@ Any parameter that names a Discord entity (channel, role, member, emoji, thread,
 
 `guild` is an optional parameter on every guild-scoped tool. If the server is configured with a default guild, it can be omitted.
 
+When more than one bot is configured, each guild-scoped tool is routed to the bot that is a member of the named server; there is nothing extra to pass. If two bots share a single server, or a server-less tool (get_bot_info, run_setup_check) needs a specific bot, an optional `bot` parameter names it, defaulting to the default bot. Ambiguity is surfaced the same way entity resolution is: the tool asks rather than guessing. See [Multiple bots](multi-bot.md).
+
 ### 1.3 Tiers
 
 Two tiers:
@@ -144,7 +146,7 @@ The 15 always-loaded tools. Chosen so that the two headline flows (chat and oper
 
 | Tool | D | Requires | Key parameters | Summary |
 |---|---|---|---|---|
-| list_servers | no | none | (none) | Guilds the bot is in, with IDs, member counts, and the bot's top role. |
+| list_servers | no | none | (none) | Every server across all configured bots, each labeled with the bot that reaches it, with IDs and approximate member counts. With multiple bots this is the routing map; any unreachable bot (bad token) is flagged. Use get_server_overview for one server's detail. |
 | get_server_overview * | no | none | guild | Structured snapshot: name, owner, boost level, features, counts of channels, roles, members, emojis, plus a category-grouped channel outline. |
 | update_server | no | Manage Guild | guild, name, description, icon, banner, verification_level, default_notifications, system_channel, rules_channel, afk_channel, afk_timeout, locale | Edits guild settings. Only passed fields change. |
 | get_server_preview | no | none | guild | Public preview data for a discoverable guild. |
@@ -350,7 +352,7 @@ The 15 always-loaded tools. Chosen so that the two headline flows (chat and oper
 | update_app_command | no | app owner | command, fields | Edits a command. |
 | delete_app_command | yes | app owner | command | Unregisters a command. |
 | set_bot_presence | no | none | status (online, idle, dnd, invisible), activity_type, activity_text | Sets the bot's presence. |
-| get_bot_info | no | none | (none) | Application info, guild count, enabled intents, library and Omnicord versions. The first diagnostics stop. |
+| get_bot_info | no | none | bot (optional) | Application info, guild count, enabled intents, library and Omnicord versions. The first diagnostics stop. Pass bot to inspect a specific bot when several are configured. |
 
 ## 18. Builder (10 tools)
 
@@ -388,7 +390,7 @@ Real-time gateway events surfaced through MCP. No notable competitor ships this.
 
 | Tool | D | Requires | Key parameters | Summary |
 |---|---|---|---|---|
-| run_setup_check * | no | none | guild (optional) | End-to-end health check: token presence and validity, the three privileged intents (enabled in the portal versus needed), guild count against the verification gate, gateway connection, and default-guild membership. Output is a plain-English pass or fix list. Run on first connect and whenever things act weird. |
+| run_setup_check * | no | none | bot (optional) | End-to-end health check: token presence and validity, the three privileged intents (enabled in the portal versus needed), guild count against the verification gate, gateway connection, and default-guild membership. Pass bot to check a specific bot when several are configured. Output is a plain-English pass or fix list. Run on first connect and whenever things act weird. |
 | explain_permissions | no | none | actor (bot or member), action, channel | Answers "can X do Y in Z, and if not, why not" by resolving the full permission chain. The preflight engine, exposed. |
 | get_rate_limit_status | no | none | (none) | Current bucket states, queue depth, and invalid-request counter. |
 | find * | no | none | query, types[] (channel, role, member, emoji, thread, event), guild | The fuzzy resolver as a tool. Returns ranked candidates with IDs and context so the caller can disambiguate once and reuse the ID. |

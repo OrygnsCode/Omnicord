@@ -97,6 +97,17 @@ so the failure mode is an explanation rather than a 403.
 This is enforced by Omnicord itself, not by the model's judgment. A
 confused or compromised AI session cannot skip the gate.
 
+## Multiple bots
+
+Omnicord can drive several bots from one install, one per server. Point it
+at a server and it uses the bot that is actually in that server, so a test
+bot and a real bot, or a separate bot per community, sit side by side
+without swapping tokens. Set it up by answering the wizard's "how many
+bots" prompt, or by hand in a `bots.json`. Destructive previews name the
+acting bot so a misrouted action is caught before it runs. A single
+`DISCORD_TOKEN` is unchanged and never sees any of this. Full details in
+[Multiple bots](docs/multi-bot.md).
+
 ## Running it
 
 Stdio, the default, for desktop MCP clients:
@@ -141,7 +152,9 @@ compose, after exporting the two secrets: `docker compose up -d`.
 
 Environment variables, or a `.env` file (the wizard writes one for you;
 source checkouts use `.env` next to `package.json`, npx and global
-installs use `.omnicord/.env` in your user folder):
+installs use `.omnicord/.env` in your user folder). Multiple bots are
+configured in a `bots.json` in the same directory; see
+[Multiple bots](docs/multi-bot.md).
 
 | Variable | What it does |
 |---|---|
@@ -149,6 +162,7 @@ installs use `.omnicord/.env` in your user folder):
 | `OMNICORD_GUILD` | Optional default server ID so tools can omit the guild parameter. |
 | `OMNICORD_SAFE_MODE` | Default on. Destructive tools preview first and require a confirm token; set to `false` only for trusted automation. |
 | `OMNICORD_GATEWAY` | Default on when a token is set: the bot shows as online and real time event subscriptions work. Set to `off` for REST only operation. |
+| `OMNICORD_HOME` | Optional. One directory to hold `.env`, `bots.json`, and saved data. Defaults to the package root for a source checkout, `.omnicord` in your user folder for an installed copy. |
 | `OMNICORD_DATA_DIR` | Where saved blueprints and scheduled messages live. Default: `.omnicord` next to `package.json` for a source checkout, `.omnicord` in your user folder for an installed copy. |
 | `OMNICORD_PORT` | HTTP port, default 3414. |
 | `OMNICORD_HTTP_HOST` | HTTP bind address, default `127.0.0.1`. |
@@ -168,16 +182,18 @@ Client config for stdio (Claude Desktop and compatible):
 }
 ```
 
-No token goes in the client config. The server finds `.env` no matter
-where the client spawns it from: it checks the current directory, then
-the package root, then `.omnicord` in your user folder, and a real
-environment variable overrides all of them.
+No token goes in the client config. The server finds `.env` and
+`bots.json` no matter where the client spawns it from: it checks
+`OMNICORD_HOME` if set, then the current directory, then the package
+root, then `.omnicord` in your user folder, and a real environment
+variable overrides all of them.
 
 ## Documentation
 
 | Doc | What is in it |
 |---|---|
 | [Getting started](docs/getting-started.md) | Setup in a few minutes, wizard or by hand. |
+| [Multiple bots](docs/multi-bot.md) | Running several bots, one per server, from one install. |
 | [Connecting AI clients](docs/clients.md) | Exact config for Claude Desktop, Claude Code, Cursor, Windsurf, ChatGPT, and anything else. |
 | [Self-hosting](docs/self-hosting.md) | HTTP transport, Docker, and the security model for networked deployments. |
 | [Troubleshooting](docs/troubleshooting.md) | Common problems and their fixes. |

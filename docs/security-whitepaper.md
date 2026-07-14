@@ -46,6 +46,10 @@ permanent harm without a person seeing the preview and approving it. This
 is on by default and can only be turned off by an operator who controls the
 server's environment, never by the AI.
 
+If you run more than one bot, the preview also names which bot would act in
+which server, so an action aimed at the wrong server shows the wrong name
+and you can stop it before it runs.
+
 ## The threat we take most seriously: hostile messages
 
 Here is the risk that is specific to a Discord tool and that most products

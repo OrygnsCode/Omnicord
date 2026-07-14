@@ -67,7 +67,8 @@ build. See [docs/clients.md](./docs/clients.md) for per-client configuration.
 src/
   index.ts            # Entry point: stdio, --http, and the init wizard
   server.ts           # Builds the McpServer and registers every tool group
-  config.ts           # Environment and .env loading; VERSION
+  config.ts           # Environment, .env, and bots.json loading; VERSION
+  home.ts             # Config and data locations (OMNICORD_HOME)
   safety.ts           # The confirmation gate (gateDestructive)
   envelope.ts         # The ok() / fail() output envelope
   http.ts             # Streamable HTTP transport and its security gates
@@ -77,6 +78,8 @@ src/
   discord/
     preflight.ts      # Permission computation, presets, canModerate
     resolve.ts        # The name-to-entity resolver
+    botRouting.ts     # Multi-bot: which bot acts for a given server
+    actingContext.ts  # Per-call acting bot, read by the safety gate
     guildData.ts      # Cached guild reads
     gateway.ts        # Gateway connection and live events
     rateLimit.ts      # Rate limit accounting

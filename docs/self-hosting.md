@@ -77,6 +77,12 @@ is a `.omnicord` folder next to the package for a source checkout, or
 `.omnicord` in the user folder for an installed copy. To keep the data
 across container restarts, mount that directory as a volume.
 
+To keep all config and data in one place, set `OMNICORD_HOME` to a directory
+and mount it as a volume: `.env`, `bots.json`, and saved data all live there.
+This is also how to run several bots in a container, since there is no
+multi-token environment variable: put a `bots.json` in the mounted
+`OMNICORD_HOME`. See [Multiple bots](multi-bot.md).
+
 ## Connecting a remote client
 
 Point your client's remote MCP configuration at

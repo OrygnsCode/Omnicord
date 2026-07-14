@@ -41,7 +41,10 @@ Either `init` command starts the setup wizard.
 
 ## The wizard (recommended)
 
-The wizard walks five steps and validates each one against Discord live, so
+The wizard first asks how many bots you want to set up. Answer 1 for the
+usual single-bot install described below, or a higher number to configure
+several at once, one per server (see [Multiple bots](multi-bot.md)). For a
+single bot it walks these steps, validating each one against Discord live so
 you find out immediately if something is wrong rather than later:
 
 1. It points you to the Discord Developer Portal to create an application
@@ -71,6 +74,10 @@ system tray, not just the window). Then in a new conversation, ask it to
 "run a setup check on my Discord bot." A healthy setup reports all checks
 passing.
 
+To add another bot later, or to change your setup, run `init` again. It
+detects your existing configuration and offers to add a bot, reconfigure
+from scratch, or quit.
+
 ## Manual setup
 
 If you would rather not use the wizard:
@@ -89,7 +96,8 @@ If you would rather not use the wizard:
    ```
 
    The default server id is optional; with it set, tools can omit the
-   server argument.
+   server argument. For more than one bot, use a `bots.json` in the same
+   directory instead of a single token; see [Multiple bots](multi-bot.md).
 4. Invite the bot. Open this URL, replacing the client id with your
    application's id, pick your server, and authorize:
 
@@ -111,6 +119,7 @@ If you would rather not use the wizard:
 | `OMNICORD_GUILD` | Optional default server id so tools can omit the server. |
 | `OMNICORD_SAFE_MODE` | Default on. Destructive tools preview and require a confirm token first. Set to `false` only for trusted automation. |
 | `OMNICORD_GATEWAY` | Default on with a token: the bot shows online and live events work. `off` for REST only. |
+| `OMNICORD_HOME` | Optional. One directory to hold `.env`, `bots.json`, and saved data. Defaults to the package root for a source checkout, `.omnicord` in your user folder for an installed copy. |
 | `OMNICORD_DATA_DIR` | Where saved blueprints and scheduled messages live. Default: `.omnicord` next to the package for a source checkout, `.omnicord` in your user folder for an installed copy. |
 | `OMNICORD_PORT` | HTTP port, default 3414. |
 | `OMNICORD_HTTP_HOST` | HTTP bind address, default 127.0.0.1. |
@@ -120,6 +129,7 @@ If you would rather not use the wizard:
 ## Next
 
 - [clients.md](clients.md) for connecting specific AI clients.
+- [multi-bot.md](multi-bot.md) to run several bots from one install.
 - [self-hosting.md](self-hosting.md) to run Omnicord as a networked or
   containerized service.
 - [troubleshooting.md](troubleshooting.md) if a step did not work.

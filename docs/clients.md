@@ -17,7 +17,9 @@ In every stdio configuration, replace the path with the absolute path to
 your built `dist/index.js`, or use the npx form (no clone needed). No
 token goes in the client configuration; Omnicord reads it from its `.env`
 file: next to the package for a source checkout, or `.omnicord/.env` in
-your user folder for an npx or global install.
+your user folder for an npx or global install, or from `OMNICORD_HOME` if
+you set it. Multiple bots are configured in a `bots.json` in the same
+directory; see [Multiple bots](multi-bot.md).
 
 ## The two command forms
 
