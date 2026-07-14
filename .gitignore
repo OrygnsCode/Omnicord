@@ -2,6 +2,7 @@ node_modules/
 dist/
 .env
 .env.*
+bots.json
 *.log
 .claude/
 .mcp.json
