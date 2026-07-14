@@ -730,6 +730,95 @@ check(cancelSchedule("../../../../tmp/anything") === false, "cancelSchedule refu
 check(cancelSchedule("not-hex-id") === false, "cancelSchedule refuses a non-hex id");
 check(deleteBlueprint("../../package") === false, "deleteBlueprint refuses traversal");
 
+// Multi-bot config normalization (phase 1: config + client core).
+{
+const { buildBots } = await import("../dist/config.js");
+
+// Backward compatibility: only DISCORD_TOKEN, no bots.json, one default bot.
+const single = buildBots(undefined, "tok-env");
+check(
+  single.length === 1 && single[0].token === "tok-env" && single[0].isDefault,
+  "single DISCORD_TOKEN yields one default bot"
+);
+check(single[0].name === "default", "the env-only bot is named default");
+
+// No token anywhere yields no bots (the server still boots for diagnostics).
+check(buildBots(undefined, undefined).length === 0, "no token anywhere yields no bots");
+check(buildBots({ bots: [] }, undefined).length === 0, "empty bots.json with no env yields no bots");
+check(buildBots({ bots: "nonsense" }, undefined).length === 0, "a non-array bots field is ignored");
+
+// bots.json with several entries and an explicit default.
+const many = buildBots(
+  {
+    bots: [
+      { name: "main", token: "tok-main", default: true },
+      { name: "test", token: "tok-test" },
+    ],
+  },
+  undefined
+);
+check(many.length === 2, "two bots load from bots.json");
+check(many.find((b) => b.name === "main")?.isDefault === true, "explicit default:true is honored");
+check(many.find((b) => b.name === "test")?.isDefault === false, "the other bot is not default");
+
+// Exactly one default even when two entries claim it; the first claimant wins.
+const twoDefault = buildBots(
+  {
+    bots: [
+      { name: "a", token: "ta", default: true },
+      { name: "b", token: "tb", default: true },
+    ],
+  },
+  undefined
+);
+check(twoDefault.filter((b) => b.isDefault).length === 1, "exactly one default even if two claim it");
+check(twoDefault.find((b) => b.name === "a")?.isDefault === true, "the first claimant wins the default");
+
+// No explicit default: the environment token becomes the default when merged.
+const merged = buildBots({ bots: [{ name: "test", token: "tok-test" }] }, "tok-env");
+check(merged.length === 2, "a bots.json entry plus DISCORD_TOKEN yields two bots");
+check(
+  merged.find((b) => b.token === "tok-env")?.isDefault === true,
+  "the env token is default when bots.json names none"
+);
+
+// No explicit default and no env: the first bot defaults.
+const firstDefault = buildBots(
+  { bots: [{ name: "x", token: "tx" }, { name: "y", token: "ty" }] },
+  undefined
+);
+check(
+  firstDefault[0].isDefault && !firstDefault[1].isDefault,
+  "the first bot defaults when nothing else decides"
+);
+
+// A token shared by the env and a bots.json entry appears once, keeping the
+// bots.json name.
+const dedup = buildBots({ bots: [{ name: "main", token: "shared" }] }, "shared");
+check(dedup.length === 1, "a token shared by env and bots.json appears once");
+check(dedup[0].name === "main" && dedup[0].isDefault, "the bots.json name is kept and it is the default");
+
+// Entries with no token are skipped; nameless entries get a generated name.
+const partial = buildBots(
+  { bots: [{ name: "named", token: "t1" }, { token: "t2" }, { name: "notoken" }] },
+  undefined
+);
+check(partial.length === 2, "entries without a token are skipped");
+check(partial.some((b) => b.name === "bot2"), "a nameless entry gets a generated name");
+
+// Duplicate names are disambiguated so a bot is always uniquely selectable.
+const dupNames = buildBots(
+  { bots: [{ name: "bot", token: "t1" }, { name: "bot", token: "t2" }] },
+  undefined
+);
+check(new Set(dupNames.map((b) => b.name)).size === 2, "duplicate bot names are made unique");
+
+// Client: one REST instance per token, reused; distinct across tokens.
+const { getRestForToken } = await import("../dist/discord/client.js");
+check(getRestForToken("aaa") === getRestForToken("aaa"), "same token returns the same REST client");
+check(getRestForToken("aaa") !== getRestForToken("bbb"), "different tokens return different REST clients");
+}
+
 if (failures > 0) {
   console.error(`\nunit: ${failures} failure(s)`);
   process.exit(1);
