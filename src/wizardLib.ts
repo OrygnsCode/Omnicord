@@ -193,3 +193,114 @@ export function clientConfigCandidates(env: {
 
   return out;
 }
+
+// --- Multi-bot config (bots.json) ---
+//
+// The wizard writes additional bots to a bots.json next to the .env. These
+// helpers are the pure half of that: parsing, naming, and serializing, so the
+// file-writing logic is unit tested without a terminal.
+
+export interface WizardBot {
+  name: string;
+  token: string;
+  default?: boolean;
+}
+
+// Parse bots.json text into entries. Tolerant of empty, missing, or malformed
+// input (returns an empty list) so a broken file never crashes the wizard.
+export function parseBotsFile(content: string | undefined): WizardBot[] {
+  if (!content || !content.trim()) return [];
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(content);
+  } catch {
+    return [];
+  }
+  const raw = (parsed as { bots?: unknown })?.bots;
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .map((b) => b as { name?: unknown; token?: unknown; default?: unknown })
+    .filter((b) => typeof b?.token === "string" && b.token.trim().length > 0)
+    .map((b) => ({
+      name: typeof b.name === "string" ? b.name.trim() : "",
+      token: (b.token as string).trim(),
+      default: b.default === true,
+    }));
+}
+
+// Return desired if free, otherwise desired-2, desired-3, ... comparing
+// case-insensitively so names stay unambiguous when selected later.
+export function uniqueBotName(desired: string, taken: string[]): string {
+  const lower = new Set(taken.map((t) => t.toLowerCase()));
+  if (!lower.has(desired.toLowerCase())) return desired;
+  let n = 2;
+  while (lower.has(`${desired}-${n}`.toLowerCase())) n += 1;
+  return `${desired}-${n}`;
+}
+
+// A short, file-safe, unique bot name suggested from a Discord username.
+export function suggestBotName(username: string, taken: string[]): string {
+  const base =
+    username
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "")
+      .slice(0, 24) || "bot";
+  return uniqueBotName(base, taken);
+}
+
+// Enforce exactly one default: the first bot flagged default wins; if none is
+// flagged, the first bot becomes default.
+function ensureOneDefault(bots: WizardBot[]): WizardBot[] {
+  if (bots.length === 0) return bots;
+  let seen = false;
+  const out = bots.map((b) => {
+    if (b.default && !seen) {
+      seen = true;
+      return { ...b, default: true };
+    }
+    return { ...b, default: false };
+  });
+  if (!seen) out[0] = { ...out[0], default: true };
+  return out;
+}
+
+// Serialize a bot list to bots.json text: 2-space indent, trailing newline,
+// exactly one default.
+export function serializeBotsFile(bots: WizardBot[]): string {
+  return (
+    JSON.stringify(
+      {
+        bots: ensureOneDefault(bots).map((b) => ({
+          name: b.name,
+          token: b.token,
+          ...(b.default ? { default: true } : {}),
+        })),
+      },
+      null,
+      2
+    ) + "\n"
+  );
+}
+
+// Add a bot to bots.json text. Dedups by token (a token already present is not
+// duplicated; a missing name is filled in). The chosen name is uniquified if it
+// collides. The first bot in an otherwise-empty file becomes the default.
+export function addBotToBotsFile(
+  content: string | undefined,
+  bot: { name: string; token: string }
+): string {
+  const bots = parseBotsFile(content);
+  const token = bot.token.trim();
+  const existing = bots.find((b) => b.token === token);
+  if (existing) {
+    if (!existing.name && bot.name) existing.name = bot.name;
+    return serializeBotsFile(bots);
+  }
+  const name = uniqueBotName(
+    bot.name || "bot",
+    bots.map((b) => b.name).filter(Boolean)
+  );
+  bots.push({ name, token, default: bots.length === 0 });
+  return serializeBotsFile(bots);
+}

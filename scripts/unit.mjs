@@ -933,6 +933,54 @@ check(caught(() => enterBot(cfg([]))) !== null, "enterBot rejects when no bots a
 check(caught(() => enterBot(cfg([B("test-a", "t1", true), B("test-b", "t2")]), "test")) !== null, "enterBot rejects an ambiguous bot name");
 }
 
+// Wizard bots.json read/write/merge logic (phase 4b: add-a-bot).
+{
+const { parseBotsFile, uniqueBotName, suggestBotName, serializeBotsFile, addBotToBotsFile } =
+  await import("../dist/wizardLib.js");
+
+// parseBotsFile tolerance.
+check(parseBotsFile(undefined).length === 0, "parseBotsFile: undefined yields empty");
+check(parseBotsFile("").length === 0, "parseBotsFile: empty string yields empty");
+check(parseBotsFile("{ not json").length === 0, "parseBotsFile: malformed JSON yields empty (no throw)");
+check(parseBotsFile('{"bots":"nope"}').length === 0, "parseBotsFile: non-array bots yields empty");
+const parsed = parseBotsFile('{"bots":[{"name":"main","token":"t1","default":true},{"token":"t2"},{"name":"x"}]}');
+check(parsed.length === 2, "parseBotsFile: entries without a token are dropped");
+check(parsed[0].name === "main" && parsed[0].default === true, "parseBotsFile: reads name and default");
+check(parsed[1].name === "" && parsed[1].token === "t2", "parseBotsFile: a nameless entry keeps an empty name");
+
+// uniqueBotName.
+check(uniqueBotName("main", ["test"]) === "main", "uniqueBotName: free name is unchanged");
+check(uniqueBotName("main", ["main"]) === "main-2", "uniqueBotName: a collision gets a numeric suffix");
+check(uniqueBotName("Main", ["main"]) === "Main-2", "uniqueBotName: collisions are case-insensitive");
+check(uniqueBotName("main", ["main", "main-2"]) === "main-3", "uniqueBotName: skips taken suffixes");
+
+// suggestBotName.
+check(suggestBotName("Omnicord Dev", []) === "omnicord-dev", "suggestBotName: slugs a username");
+check(suggestBotName("2ndOmniCord Dev!!", []) === "2ndomnicord-dev", "suggestBotName: strips punctuation");
+check(suggestBotName("", []) === "bot", "suggestBotName: empty username falls back to bot");
+check(suggestBotName("Omnicord Dev", ["omnicord-dev"]) === "omnicord-dev-2", "suggestBotName: uniquifies against taken names");
+
+// serializeBotsFile round-trips and enforces one default.
+const ser = serializeBotsFile([{ name: "a", token: "ta" }, { name: "b", token: "tb" }]);
+const back = parseBotsFile(ser);
+check(back.length === 2 && back[0].default === true && back[1].default === false, "serializeBotsFile: first bot becomes the sole default when none is set");
+const twoDef = parseBotsFile(serializeBotsFile([{ name: "a", token: "ta", default: true }, { name: "b", token: "tb", default: true }]));
+check(twoDef.filter((b) => b.default).length === 1, "serializeBotsFile: at most one default is written");
+
+// addBotToBotsFile.
+const first = addBotToBotsFile(undefined, { name: "main", token: "t1" });
+const firstParsed = parseBotsFile(first);
+check(firstParsed.length === 1 && firstParsed[0].name === "main" && firstParsed[0].default === true, "addBotToBotsFile: first bot is added as the default");
+const second = addBotToBotsFile(first, { name: "test", token: "t2" });
+const secondParsed = parseBotsFile(second);
+check(secondParsed.length === 2 && secondParsed.find((b) => b.name === "test").default === false, "addBotToBotsFile: a second bot is not default");
+const dup = parseBotsFile(addBotToBotsFile(second, { name: "again", token: "t1" }));
+check(dup.length === 2, "addBotToBotsFile: a duplicate token is not added twice");
+const collide = parseBotsFile(addBotToBotsFile(first, { name: "main", token: "t9" }));
+check(collide.some((b) => b.name === "main-2"), "addBotToBotsFile: a colliding name is uniquified");
+check(parseBotsFile(addBotToBotsFile("{ broken", { name: "main", token: "t1" })).length === 1, "addBotToBotsFile: a malformed existing file is treated as empty");
+}
+
 if (failures > 0) {
   console.error(`\nunit: ${failures} failure(s)`);
   process.exit(1);
