@@ -1,6 +1,7 @@
 import { createHash, randomBytes } from "node:crypto";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { ok, fail } from "./envelope.js";
+import { getActingBot } from "./discord/actingContext.js";
 
 // The confirmation gate for destructive operations, per tool-catalog 1.4.
 //
@@ -29,13 +30,22 @@ export function safeModeEnabled(): boolean {
 
 // Stable hash of the arguments that define the action. Callers pass the
 // resolved values (IDs, not fuzzy names) so that the same intent hashes
-// the same way regardless of how the user spelled it.
-function hashAction(tool: string, args: Record<string, unknown>): string {
+// the same way regardless of how the user spelled it. When a bot is acting
+// (multi-bot setups) it is folded into the hash, so a token minted for one
+// bot cannot be spent as another even when the target arguments match.
+function hashAction(
+  tool: string,
+  args: Record<string, unknown>,
+  bot?: string
+): string {
   const sorted = Object.keys(args)
     .sort()
     .map((k) => `${k}=${JSON.stringify(args[k])}`)
     .join("&");
-  return createHash("sha256").update(`${tool}?${sorted}`).digest("hex");
+  const boundBot = bot ? `&__bot=${bot}` : "";
+  return createHash("sha256")
+    .update(`${tool}?${sorted}${boundBot}`)
+    .digest("hex");
 }
 
 function sweepExpired(now: number): void {
@@ -60,7 +70,8 @@ export interface GateInput {
 export function gateDestructive(input: GateInput): CallToolResult | null {
   const now = Date.now();
   sweepExpired(now);
-  const argsHash = hashAction(input.tool, input.args);
+  const acting = getActingBot();
+  const argsHash = hashAction(input.tool, input.args, acting?.bot);
 
   if (input.confirmToken) {
     const entry = pending.get(input.confirmToken);
@@ -95,12 +106,19 @@ export function gateDestructive(input: GateInput): CallToolResult | null {
       expiresAt: now + TOKEN_TTL_MS,
     });
     const mode = input.dryRun ? "Dry run" : "Safe mode";
+    // With more than one bot, name the acting bot and server up front so the
+    // human confirming sees exactly which bot would act where. This is the
+    // wrong-server backstop: a misrouted action shows the wrong name here.
+    const summary = acting
+      ? `Acting as ${acting.bot} in ${acting.server}. ${input.previewSummary}`
+      : input.previewSummary;
     return ok(
-      `${mode}: nothing was changed. ${input.previewSummary} ` +
+      `${mode}: nothing was changed. ${summary} ` +
         "To execute, call again with the confirm_token.",
       {
         executed: false,
         preview: input.previewDetails ?? null,
+        ...(acting ? { acting } : {}),
         confirm_token: token,
         token_expires_in_seconds: TOKEN_TTL_MS / 1000,
       }

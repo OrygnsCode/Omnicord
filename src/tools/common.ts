@@ -12,6 +12,10 @@ import type { BotConfig, OmnicordConfig } from "../config.js";
 import { getRestForToken, NoTokenError } from "../discord/client.js";
 import { resolveBotGuild, resolveBotName } from "../discord/botRouting.js";
 import {
+  runWithActingContext,
+  setActingBot,
+} from "../discord/actingContext.js";
+import {
   getChannels,
   getGuildList,
   getRoles,
@@ -71,36 +75,37 @@ function isNetworkError(err: unknown): boolean {
 export function guarded<A>(
   handler: (args: A) => Promise<CallToolResult>
 ): (args: A) => Promise<CallToolResult> {
-  return async (args: A) => {
-    try {
-      return await handler(args);
-    } catch (err) {
-      if (err instanceof ToolProblem) return err.result;
-      if (isNetworkError(err)) {
-        return fail(
-          "Could not reach Discord: the connection timed out at the " +
-            "network level before any API was involved. This is usually " +
-            "transient local network or routing trouble; retrying the " +
-            "same call typically works.",
-          { network_error: true }
-        );
-      }
-      if (err instanceof DiscordAPIError) {
-        if (err.status === 403) {
+  return (args: A) =>
+    runWithActingContext(async () => {
+      try {
+        return await handler(args);
+      } catch (err) {
+        if (err instanceof ToolProblem) return err.result;
+        if (isNetworkError(err)) {
           return fail(
-            "Discord refused access (403). The bot is missing a permission " +
-              "for this, or cannot see the channel. Check the bot's role " +
-              "and the channel's permission overrides.",
-            { discord_error: { code: err.code, status: err.status } }
+            "Could not reach Discord: the connection timed out at the " +
+              "network level before any API was involved. This is usually " +
+              "transient local network or routing trouble; retrying the " +
+              "same call typically works.",
+            { network_error: true }
           );
         }
-        return fail(`Discord API error ${err.status}: ${err.message}`, {
-          discord_error: { code: err.code, status: err.status },
-        });
+        if (err instanceof DiscordAPIError) {
+          if (err.status === 403) {
+            return fail(
+              "Discord refused access (403). The bot is missing a permission " +
+                "for this, or cannot see the channel. Check the bot's role " +
+                "and the channel's permission overrides.",
+              { discord_error: { code: err.code, status: err.status } }
+            );
+          }
+          return fail(`Discord API error ${err.status}: ${err.message}`, {
+            discord_error: { code: err.code, status: err.status },
+          });
+        }
+        throw err;
       }
-      throw err;
-    }
-  };
+    });
 }
 
 // What a tool gets after entering: the acting bot's client, the resolved
@@ -109,6 +114,7 @@ export function guarded<A>(
 export interface Entered {
   rest: REST;
   guildId: string;
+  guildName: string;
   bot: BotConfig;
 }
 
@@ -178,9 +184,16 @@ export async function enter(
           fail(`Internal error resolving bot "${resolution.botName}".`)
         );
       }
+      // Record the acting bot for the safety gate, but only when more than one
+      // bot is configured. With a single bot there is nothing to disambiguate,
+      // so single-bot previews and tokens stay exactly as before.
+      if (config.bots.length > 1) {
+        setActingBot({ bot: bot.name, server: resolution.guildName });
+      }
       return {
         rest: getRestForToken(bot.token),
         guildId: resolution.guildId,
+        guildName: resolution.guildName,
         bot,
       };
     }

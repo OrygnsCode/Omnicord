@@ -866,6 +866,57 @@ check(resolveBotName(["main", "test"], "test").botName === "test", "resolveBotNa
 check(resolveBotName(["main", "test"], "nope").kind === "none", "resolveBotName no match is none");
 }
 
+// Multi-bot safety gate: bind the confirm token to the acting bot and name it
+// in the preview (phase 3).
+{
+process.env.OMNICORD_SAFE_MODE = "true";
+const { gateDestructive } = await import("../dist/safety.js");
+const { runWithActingContext, setActingBot } = await import("../dist/discord/actingContext.js");
+const parse = (r) => JSON.parse(r.content[0].text);
+const gateArgs = {
+  tool: "delete_channel",
+  args: { guild: "g1", channel: "c1" },
+  previewSummary: "Would delete #general.",
+};
+const mint = (acting) => {
+  let out;
+  runWithActingContext(() => {
+    if (acting) setActingBot(acting);
+    out = gateDestructive({ ...gateArgs });
+  });
+  return out;
+};
+const spend = (token, acting) => {
+  let out;
+  runWithActingContext(() => {
+    if (acting) setActingBot(acting);
+    out = gateDestructive({ ...gateArgs, confirmToken: token });
+  });
+  return out;
+};
+
+// Multi-bot: the preview names the acting bot and server, and still mints.
+const previewB = parse(mint({ bot: "second-dev", server: "Omnicord Dev 2" }));
+check(/Acting as second-dev in Omnicord Dev 2/.test(previewB.summary), "gate preview names the acting bot and server");
+check(typeof previewB.data.confirm_token === "string", "gate still mints a token when a bot is acting");
+check(previewB.data.acting && previewB.data.acting.bot === "second-dev", "gate returns the acting bot in structured data");
+
+// A token minted for one bot cannot be spent as another.
+const crossSpend = spend(previewB.data.confirm_token, { bot: "omnicord-dev", server: "OmniCord Dev" });
+check(crossSpend.isError && /different action/.test(parse(crossSpend).summary), "a token minted for one bot is rejected when spent as another");
+
+// The same bot spends its own token and proceeds.
+const previewB2 = parse(mint({ bot: "second-dev", server: "Omnicord Dev 2" }));
+check(spend(previewB2.data.confirm_token, { bot: "second-dev", server: "Omnicord Dev 2" }) === null, "the same bot spends its own token and proceeds");
+
+// Single-bot (no acting context): preview and flow unchanged.
+const previewSingle = parse(mint(null));
+check(!/Acting as/.test(previewSingle.summary), "single-bot preview does not name a bot");
+check(previewSingle.summary.includes("Would delete #general."), "single-bot preview text is unchanged");
+check(previewSingle.data.acting === undefined, "single-bot preview carries no acting field");
+check(spend(previewSingle.data.confirm_token, null) === null, "single-bot token spends normally");
+}
+
 if (failures > 0) {
   console.error(`\nunit: ${failures} failure(s)`);
   process.exit(1);
