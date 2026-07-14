@@ -4,6 +4,40 @@ All notable changes to Omnicord are recorded here. The format follows
 Keep a Changelog, and the project follows semantic versioning. Version
 1.0.0 marked the public launch; releases since follow semver.
 
+## 1.2.0 (2026-07-14)
+
+Adds multi-bot support: run several Discord bots, one per server, from a
+single Omnicord install. This release is purely additive. A single-bot setup
+behaves exactly as before, down to byte-for-byte identical confirmation
+previews and tokens; the new behavior appears only once a second bot is
+configured.
+
+### Added
+
+- Multiple bots from one install. Alongside the existing `DISCORD_TOKEN`, a
+  `bots.json` file lists each bot by name and token, with one marked as the
+  default. Every server-facing tool routes to whichever bot is a member of
+  the target server, so a request names the server and Omnicord selects the
+  bot. When a server name is ambiguous, or one server holds more than one
+  configured bot, Omnicord asks which bot to use instead of guessing.
+- The confirmation gate is multi-bot aware. With more than one bot
+  configured, a destructive preview names which bot would act in which
+  server, and the confirmation token is bound to that acting bot, so a token
+  minted for one bot cannot be spent as another. An action aimed at the wrong
+  server shows the wrong bot name, which is the signal to stop it.
+- `list_servers` spans every configured bot and labels each server with the
+  bot that reaches it, and flags any bot whose token is unreachable.
+  `get_bot_info` and `run_setup_check` take an optional `bot` to target one.
+- The setup wizard asks how many bots you are configuring. One writes the
+  same `.env` as before; several write a `bots.json`. Re-running it on an
+  existing install offers to add another bot or reconfigure, and folds a lone
+  `.env` bot into `bots.json` when you add a second.
+- `OMNICORD_HOME` overrides where the `.env`, `bots.json`, and data files
+  live, so a deployment can keep its configuration outside the working
+  directory. Left unset, the locations are unchanged.
+- Resilience across bots. A single unreachable or misconfigured bot no longer
+  affects the others. It contributes nothing and is reported as unreachable.
+
 ## 1.1.2 (2026-07-12)
 
 A dependency release. No tool changes and no behavior changes.

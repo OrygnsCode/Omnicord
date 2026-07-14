@@ -46,6 +46,9 @@ Prefer to watch? Here is the full setup, start to finish:
 
 [![Omnicord setup walkthrough](https://img.youtube.com/vi/Qk0lY5PGHSE/hqdefault.jpg)](https://www.youtube.com/watch?v=Qk0lY5PGHSE)
 
+This walkthrough is a little dated now, but the core steps still apply. A
+fuller, updated walkthrough is planned.
+
 The wizard goes from a bare Discord application to a working setup in
 about a minute. It takes the bot token with input hidden, verifies it
 live against Discord, checks the privileged intent toggles and waits
