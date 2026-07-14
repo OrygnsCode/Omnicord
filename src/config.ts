@@ -18,6 +18,12 @@ import { dirname, join } from "node:path";
 const require = createRequire(import.meta.url);
 const packageJsonPath = require.resolve("../package.json");
 
+// OMNICORD_HOME, when set, is the config directory the wizard writes to and
+// the server reads from first, so the two always agree (see home.ts). It is
+// loaded before the other files so it wins among them; a real environment
+// variable still overrides every file.
+const configHome = process.env.OMNICORD_HOME?.trim();
+if (configHome) loadDotenv({ path: join(configHome, ".env"), quiet: true });
 loadDotenv({ quiet: true });
 loadDotenv({ path: join(dirname(packageJsonPath), ".env"), quiet: true });
 loadDotenv({ path: join(homedir(), ".omnicord", ".env"), quiet: true });
@@ -127,7 +133,9 @@ export function buildBots(
 // Discover a bots.json the same way .env is discovered: working directory,
 // then package root, then ~/.omnicord. The first one found wins.
 function readBotsFile(): RawBotsFile | undefined {
+  const home = process.env.OMNICORD_HOME?.trim();
   const candidates = [
+    ...(home ? [join(home, "bots.json")] : []),
     join(process.cwd(), "bots.json"),
     join(dirname(packageJsonPath), "bots.json"),
     join(homedir(), ".omnicord", "bots.json"),

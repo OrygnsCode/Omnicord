@@ -21,19 +21,34 @@ export const PACKAGE_ROOT = dirname(
 // than checked out from source.
 export const IS_INSTALLED = PACKAGE_ROOT.split(sep).includes("node_modules");
 
+// The directory that holds the .env and bots.json the wizard writes and the
+// server reads. OMNICORD_HOME overrides it, for a custom location, a container,
+// or an isolated test run; otherwise a source checkout keeps config at the
+// package root and an installed copy uses ~/.omnicord. config.ts reads the same
+// override, so the wizard and the server always agree on where config lives.
+export function configDir(): string {
+  const override = process.env.OMNICORD_HOME?.trim();
+  if (override) return override;
+  return IS_INSTALLED ? join(homedir(), ".omnicord") : PACKAGE_ROOT;
+}
+
 export function dataDir(): string {
   const override = process.env.OMNICORD_DATA_DIR?.trim();
   if (override) return override;
+  const home = process.env.OMNICORD_HOME?.trim();
+  if (home) return join(home, ".omnicord");
   return IS_INSTALLED
     ? join(homedir(), ".omnicord")
     : join(PACKAGE_ROOT, ".omnicord");
 }
 
-// Where the wizard writes DISCORD_TOKEN and OMNICORD_GUILD. The server
-// loads this path as its final .env fallback (see config.ts), so the
-// wizard and the server always agree.
+// Where the wizard writes DISCORD_TOKEN and OMNICORD_GUILD (single-bot) and
+// the bots.json (multi-bot). The server loads both from the same directory
+// (see config.ts), so the wizard and the server always agree.
 export function envFilePath(): string {
-  return IS_INSTALLED
-    ? join(homedir(), ".omnicord", ".env")
-    : join(PACKAGE_ROOT, ".env");
+  return join(configDir(), ".env");
+}
+
+export function botsFilePath(): string {
+  return join(configDir(), "bots.json");
 }
