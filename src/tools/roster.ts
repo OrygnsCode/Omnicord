@@ -7,7 +7,7 @@ import type {
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { OmnicordConfig } from "../config.js";
 import { getRoles } from "../discord/guildData.js";
-import { getRest, NoTokenError } from "../discord/client.js";
+import { getRestForToken, NoTokenError } from "../discord/client.js";
 import { resolveOne } from "../discord/resolve.js";
 import { ok, fail } from "../envelope.js";
 import { enter, guarded, guildParam, memberDisplayName } from "./common.js";
@@ -25,29 +25,43 @@ export function registerRosterTools(
     {
       title: "List servers",
       description:
-        "Every server the bot is in, with approximate member counts. Use " +
+        "Every server your bots are in, each labeled with which bot reaches " +
+        "it, with approximate member counts. When more than one bot is " +
+        "configured this is the map for choosing which one acts. Use " +
         "get_server_overview for one server's full detail.",
       annotations: { readOnlyHint: true },
     },
     guarded(async () => {
-      let rest;
-      try {
-        rest = getRest(config);
-      } catch (err) {
-        if (err instanceof NoTokenError) return fail(err.message);
-        throw err;
+      if (config.bots.length === 0) {
+        return fail(new NoTokenError().message);
       }
-      const guilds = (await rest.get(Routes.userGuilds(), {
-        query: new URLSearchParams({ with_counts: "true" }),
-      })) as RESTGetAPICurrentUserGuildsResult;
-      return ok(`The bot is in ${guilds.length} server(s).`, {
-        servers: guilds.map((g) => ({
+      const perBot = await Promise.all(
+        config.bots.map(async (bot) => {
+          const rest = getRestForToken(bot.token);
+          const guilds = (await rest.get(Routes.userGuilds(), {
+            query: new URLSearchParams({ with_counts: "true" }),
+          })) as RESTGetAPICurrentUserGuildsResult;
+          return { bot, guilds };
+        })
+      );
+      const servers = perBot.flatMap(({ bot, guilds }) =>
+        guilds.map((g) => ({
           id: g.id,
           name: g.name,
           members_approximate:
             (g as { approximate_member_count?: number }).approximate_member_count ?? null,
           owner: g.owner ?? false,
-        })),
+          bot: bot.name,
+        }))
+      );
+      const uniqueServers = new Set(servers.map((s) => s.id)).size;
+      const summary =
+        config.bots.length === 1
+          ? `The bot is in ${servers.length} server(s).`
+          : `${config.bots.length} bots across ${uniqueServers} server(s).`;
+      return ok(summary, {
+        bots: config.bots.map((b) => ({ name: b.name, default: b.isDefault })),
+        servers,
       });
     })
   );

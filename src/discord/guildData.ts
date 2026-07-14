@@ -39,7 +39,14 @@ export interface GuildChannelLite {
 
 const channelCache = new Map<string, CacheEntry<GuildChannelLite[]>>();
 const roleCache = new Map<string, CacheEntry<APIRole[]>>();
-let guildListCache: CacheEntry<RESTGetAPICurrentUserGuildsResult> | undefined;
+// The guild list and the bot's own user are per-bot, so their caches are
+// keyed by the REST instance (one per bot token). Channels and roles are
+// guild-global and stay keyed by guild id, shared across whichever bot reads
+// them. WeakMap so a retired client's cache is collected with it.
+const guildListCache = new WeakMap<
+  REST,
+  CacheEntry<RESTGetAPICurrentUserGuildsResult>
+>();
 
 function fresh<T>(entry: CacheEntry<T> | undefined): T | undefined {
   if (entry && Date.now() - entry.at < TTL_MS) return entry.value;
@@ -73,12 +80,12 @@ export async function getRoles(
 export async function getGuildList(
   rest: REST
 ): Promise<RESTGetAPICurrentUserGuildsResult> {
-  const cached = fresh(guildListCache);
+  const cached = fresh(guildListCache.get(rest));
   if (cached) return cached;
   const value = (await rest.get(
     Routes.userGuilds()
   )) as RESTGetAPICurrentUserGuildsResult;
-  guildListCache = { at: Date.now(), value };
+  guildListCache.set(rest, { at: Date.now(), value });
   return value;
 }
 
@@ -89,17 +96,19 @@ export function invalidateGuildCaches(guildId: string): void {
   roleCache.delete(guildId);
 }
 
-// The bot's own user, cached for an hour. Needed constantly by preflight
-// to compute the bot's effective permissions.
-let botUserCache: CacheEntry<APIUser> | undefined;
+// The bot's own user, cached for an hour and keyed per bot. Needed constantly
+// by preflight to compute the bot's effective permissions, and each bot has a
+// distinct identity, so this must never be shared across clients.
+const botUserCache = new WeakMap<REST, CacheEntry<APIUser>>();
 const BOT_USER_TTL_MS = 60 * 60_000;
 
 export async function getBotUser(rest: REST): Promise<APIUser> {
-  if (botUserCache && Date.now() - botUserCache.at < BOT_USER_TTL_MS) {
-    return botUserCache.value;
+  const entry = botUserCache.get(rest);
+  if (entry && Date.now() - entry.at < BOT_USER_TTL_MS) {
+    return entry.value;
   }
   const value = (await rest.get(Routes.user("@me"))) as APIUser;
-  botUserCache = { at: Date.now(), value };
+  botUserCache.set(rest, { at: Date.now(), value });
   return value;
 }
 

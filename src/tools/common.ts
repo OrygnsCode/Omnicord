@@ -8,8 +8,9 @@ import type {
 } from "discord-api-types/v10";
 import { DiscordAPIError, type REST } from "@discordjs/rest";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
-import type { OmnicordConfig } from "../config.js";
-import { getRest, NoTokenError } from "../discord/client.js";
+import type { BotConfig, OmnicordConfig } from "../config.js";
+import { getRestForToken, NoTokenError } from "../discord/client.js";
+import { resolveBotGuild, resolveBotName } from "../discord/botRouting.js";
 import {
   getChannels,
   getGuildList,
@@ -102,49 +103,114 @@ export function guarded<A>(
   };
 }
 
+// What a tool gets after entering: the acting bot's client, the resolved
+// server id, and the bot that owns the action. Existing tools destructure
+// rest and guildId and ignore bot; the safety gate and previews use bot.
+export interface Entered {
+  rest: REST;
+  guildId: string;
+  bot: BotConfig;
+}
+
 export async function enter(
   config: OmnicordConfig,
-  guildArg: string | undefined
-): Promise<{ rest: REST; guildId: string }> {
-  let rest: REST;
-  try {
-    rest = getRest(config);
-  } catch (err) {
-    if (err instanceof NoTokenError) throw new ToolProblem(fail(err.message));
-    throw err;
+  guildArg: string | undefined,
+  botArg?: string
+): Promise<Entered> {
+  if (config.bots.length === 0) {
+    throw new ToolProblem(fail(new NoTokenError().message));
+  }
+
+  // An explicit bot selector narrows the search to that one bot.
+  let candidates = config.bots;
+  if (botArg) {
+    const picked = resolveBotName(
+      config.bots.map((b) => b.name),
+      botArg
+    );
+    if (picked.kind === "none") {
+      throw new ToolProblem(
+        fail(
+          `No bot named "${botArg}". Configured bots: ` +
+            `${config.bots.map((b) => b.name).join(", ")}.`
+        )
+      );
+    }
+    if (picked.kind === "ambiguous") {
+      throw new ToolProblem(
+        fail(`"${botArg}" matches more than one bot. Use an exact name.`, {
+          candidates: picked.candidates,
+        })
+      );
+    }
+    candidates = config.bots.filter((b) => b.name === picked.botName);
   }
 
   const wanted = guildArg ?? config.defaultGuild;
   if (!wanted) {
     throw new ToolProblem(
       fail(
-        "No guild specified and no default configured. Pass a guild name or " +
-          "ID, or set OMNICORD_GUILD."
+        "No server specified and no default configured. Pass a server name " +
+          "or ID, or set OMNICORD_GUILD."
       )
     );
   }
 
-  const guilds = await getGuildList(rest);
-  const resolution = resolveOne(
-    wanted,
-    guilds.map((g) => ({ id: g.id, name: g.name, type: "guild" }))
-  );
-  if ("match" in resolution) {
-    return { rest, guildId: resolution.match.id };
-  }
-  if (resolution.candidates.length === 0) {
-    throw new ToolProblem(
-      fail(
-        `The bot is not in any guild matching "${wanted}". ` +
-          "Check the name, or invite the bot to that server first."
-      )
-    );
-  }
-  throw new ToolProblem(
-    fail(`Multiple guilds match "${wanted}". Use an exact name or ID.`, {
-      candidates: resolution.candidates,
+  // Each candidate bot's servers, fetched through that bot's own client and
+  // cached per bot.
+  const botGuilds = await Promise.all(
+    candidates.map(async (b) => {
+      const guilds = await getGuildList(getRestForToken(b.token));
+      return {
+        name: b.name,
+        guilds: guilds.map((g) => ({ id: g.id, name: g.name })),
+      };
     })
   );
+
+  const resolution = resolveBotGuild(botGuilds, wanted);
+  switch (resolution.kind) {
+    case "match": {
+      const bot = config.bots.find((b) => b.name === resolution.botName);
+      if (!bot) {
+        // Unreachable: the resolver only returns names it was given.
+        throw new ToolProblem(
+          fail(`Internal error resolving bot "${resolution.botName}".`)
+        );
+      }
+      return {
+        rest: getRestForToken(bot.token),
+        guildId: resolution.guildId,
+        bot,
+      };
+    }
+    case "ambiguous-bot":
+      throw new ToolProblem(
+        fail(
+          `More than one of your bots is in "${resolution.guildName}": ` +
+            `${resolution.bots.join(", ")}. Pass bot with one of those ` +
+            "names to choose which one acts.",
+          {
+            server: { id: resolution.guildId, name: resolution.guildName },
+            bots: resolution.bots,
+          }
+        )
+      );
+    case "no-guild":
+      throw new ToolProblem(
+        fail(
+          `No configured bot is in a server matching "${wanted}". ` +
+            "Check the name, or invite one of your bots to that server first."
+        )
+      );
+    case "ambiguous-guild":
+      throw new ToolProblem(
+        fail(
+          `More than one server matches "${wanted}". Use an exact name or ID.`,
+          { candidates: resolution.candidates }
+        )
+      );
+  }
 }
 
 export async function resolveChannel(

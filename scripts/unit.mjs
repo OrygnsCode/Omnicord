@@ -819,6 +819,53 @@ check(getRestForToken("aaa") === getRestForToken("aaa"), "same token returns the
 check(getRestForToken("aaa") !== getRestForToken("bbb"), "different tokens return different REST clients");
 }
 
+// Multi-bot routing (phase 2: resolve which bot acts for a server).
+{
+const { resolveBotGuild, resolveBotName } = await import("../dist/discord/botRouting.js");
+const bg = (name, guilds) => ({ name, guilds });
+const g = (id, name) => ({ id, name });
+
+const oneBot = [
+  bg("main", [g("111111111111111111", "Gaming"), g("222222222222222222", "Community")]),
+];
+let r = resolveBotGuild(oneBot, "Gaming");
+check(r.kind === "match" && r.botName === "main" && r.guildId === "111111111111111111", "one bot resolves a server by name to that bot");
+r = resolveBotGuild(oneBot, "222222222222222222");
+check(r.kind === "match" && r.guildId === "222222222222222222", "resolves a server by id");
+r = resolveBotGuild(oneBot, "Nonexistent");
+check(r.kind === "no-guild", "an unknown server is no-guild");
+
+// Different bots in different servers: route to whichever bot is in the target.
+const twoBots = [
+  bg("main", [g("111111111111111111", "Gaming")]),
+  bg("test", [g("333333333333333333", "Sandbox")]),
+];
+check(resolveBotGuild(twoBots, "Sandbox").botName === "test", "routes to the bot that is in the target server");
+check(resolveBotGuild(twoBots, "Gaming").botName === "main", "routes the other server to the other bot");
+
+// Two bots in the SAME server: ambiguous by bot.
+const shared = [
+  bg("main", [g("111111111111111111", "Gaming")]),
+  bg("backup", [g("111111111111111111", "Gaming")]),
+];
+r = resolveBotGuild(shared, "Gaming");
+check(r.kind === "ambiguous-bot" && r.bots.includes("main") && r.bots.includes("backup"), "two bots in one server is ambiguous by bot");
+
+// A name matching two different servers: ambiguous by server.
+const twoMatch = [
+  bg("main", [g("111111111111111111", "test-alpha"), g("222222222222222222", "test-beta")]),
+];
+r = resolveBotGuild(twoMatch, "test");
+check(r.kind === "ambiguous-guild" && r.candidates.length === 2, "a name matching two servers is ambiguous by server");
+check(r.candidates.every((c) => c.bots.includes("main")), "ambiguous-server candidates carry the owning bot");
+
+check(resolveBotGuild([], "anything").kind === "no-guild", "no bots yields no-guild");
+
+// Explicit bot selector.
+check(resolveBotName(["main", "test"], "test").botName === "test", "resolveBotName returns the exact match");
+check(resolveBotName(["main", "test"], "nope").kind === "none", "resolveBotName no match is none");
+}
+
 if (failures > 0) {
   console.error(`\nunit: ${failures} failure(s)`);
   process.exit(1);
