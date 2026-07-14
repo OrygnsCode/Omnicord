@@ -935,8 +935,13 @@ check(caught(() => enterBot(cfg([B("test-a", "t1", true), B("test-b", "t2")]), "
 
 // Wizard bots.json read/write/merge logic (phase 4b: add-a-bot).
 {
-const { parseBotsFile, uniqueBotName, suggestBotName, serializeBotsFile, addBotToBotsFile } =
+const { parseBotsFile, uniqueBotName, suggestBotName, serializeBotsFile, addBotToBotsFile, envRemoveKey } =
   await import("../dist/wizardLib.js");
+
+// envRemoveKey drops one line, keeps the rest.
+check(envRemoveKey("A=1\nDISCORD_TOKEN=xyz\nB=2\n", "DISCORD_TOKEN") === "A=1\nB=2\n", "envRemoveKey: removes the key line, keeps others");
+check(!envRemoveKey("DISCORD_TOKEN=xyz\n", "DISCORD_TOKEN").includes("DISCORD_TOKEN"), "envRemoveKey: removing the only key leaves no trace of it");
+check(envRemoveKey("A=1\n", "DISCORD_TOKEN") === "A=1\n", "envRemoveKey: absent key is a no-op");
 
 // parseBotsFile tolerance.
 check(parseBotsFile(undefined).length === 0, "parseBotsFile: undefined yields empty");

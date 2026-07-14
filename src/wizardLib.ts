@@ -53,6 +53,15 @@ export function envUpsert(content: string, key: string, value: string): string {
   return out.join("\n").replace(/\n*$/, "\n");
 }
 
+// Remove a KEY=... line from dotenv text, preserving every other line and
+// comment. Used when a single bot is moved out of .env into bots.json so the
+// old token does not linger and load as an extra bot.
+export function envRemoveKey(content: string, key: string): string {
+  const pattern = new RegExp(`^\\s*${key}\\s*=`);
+  const kept = content.split(/\r?\n/).filter((line) => !pattern.test(line));
+  return kept.join("\n").replace(/\n*$/, "\n");
+}
+
 export function inviteUrl(applicationId: string, permissions: bigint): string {
   return (
     "https://discord.com/oauth2/authorize" +
