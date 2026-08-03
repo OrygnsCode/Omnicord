@@ -4,6 +4,40 @@ All notable changes to Omnicord are recorded here. The format follows
 Keep a Changelog, and the project follows semantic versioning. Version
 1.0.0 marked the public launch; releases since follow semver.
 
+## 1.2.1 (2026-08-02)
+
+A dependency release. No tool changes and no behavior changes.
+
+### Security
+
+- Four advisories against packages in the MCP SDK's dependency tree are
+  resolved: `fast-uri` (high, host confusion via a literal backslash authority
+  delimiter and via failed IDN canonicalization), `hono` and
+  `@hono/node-server` (moderate, including a path traversal in `serve-static`
+  on Windows), and `body-parser` (low, a denial of service when an invalid
+  limit silently disables size enforcement).
+
+  None were reachable from Omnicord. The HTTP transport is built on
+  `node:http` directly, and the only SDK entry points Omnicord imports are
+  `server/mcp.js`, `server/stdio.js`, `server/streamableHttp.js`, and
+  `types.js`, none of which is the hono-based server. They were still reported
+  by every scanner pointed at the project, so this removes them rather than
+  explaining them away.
+
+  The practical effect is on the container image. An npm install resolves
+  dependency ranges at install time, so installs of 1.2.0 already picked up
+  the fixed versions on their own. The image is built with `npm ci`, which
+  pins from the lockfile, so it carried the older tree until this release.
+  A production `npm audit` reports zero vulnerabilities.
+
+### Changed
+
+- The container image is based on Node 24 (the active LTS line) instead of
+  Node 22, which has moved to maintenance. Node 24 is already covered by the
+  CI matrix.
+- `@modelcontextprotocol/sdk` 1.30.0, `@discordjs/rest` 2.6.3, and
+  `discord-api-types` 0.38.52.
+
 ## 1.2.0 (2026-07-14)
 
 Adds multi-bot support: run several Discord bots, one per server, from a
