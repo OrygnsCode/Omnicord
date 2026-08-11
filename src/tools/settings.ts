@@ -79,7 +79,7 @@ export function registerSettingsTools(
           .enum(["none", "low", "medium", "high", "very_high"])
           .optional(),
         afk_timeout_seconds: z
-          .union([z.literal(60), z.literal(300), z.literal(900), z.literal(1800), z.literal(3600)])
+          .literal([60, 300, 900, 1800, 3600])
           .optional(),
         afk_channel: z.string().optional()
           .describe("Voice channel name or ID, or none to clear."),

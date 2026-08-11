@@ -107,7 +107,7 @@ export function registerThreadTools(
         private: z.boolean().optional()
           .describe("Invite-only thread; only works standalone."),
         auto_archive_minutes: z
-          .union([z.literal(60), z.literal(1440), z.literal(4320), z.literal(10080)])
+          .literal([60, 1440, 4320, 10080])
           .optional()
           .describe("Inactivity timeout: 60, 1440, 4320, or 10080. Default 1440."),
         slowmode_seconds: z.number().int().min(0).max(21600).optional(),
@@ -276,7 +276,7 @@ export function registerThreadTools(
         locked: z.boolean().optional(),
         slowmode_seconds: z.number().int().min(0).max(21600).optional(),
         auto_archive_minutes: z
-          .union([z.literal(60), z.literal(1440), z.literal(4320), z.literal(10080)])
+          .literal([60, 1440, 4320, 10080])
           .optional(),
       },
       annotations: { readOnlyHint: false, destructiveHint: false },
