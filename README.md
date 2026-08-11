@@ -165,6 +165,7 @@ configured in a `bots.json` in the same directory; see
 |---|---|
 | `DISCORD_TOKEN` | The bot token. Required for anything real; the server boots without it and the diagnostics explain what to fix. |
 | `OMNICORD_GUILD` | Optional default server ID so tools can omit the guild parameter. |
+| `OMNICORD_TOOLS` | Which tool groups to load. Unset loads all 151. See [Toolsets](docs/toolsets.md). |
 | `OMNICORD_SAFE_MODE` | Default on. Destructive tools preview first and require a confirm token; set to `false` only for trusted automation. |
 | `OMNICORD_GATEWAY` | Default on when a token is set: the bot shows as online and real time event subscriptions work. Set to `off` for REST only operation. |
 | `OMNICORD_HOME` | Optional. One directory to hold `.env`, `bots.json`, and saved data. Defaults to the package root for a source checkout, `.omnicord` in your user folder for an installed copy. |

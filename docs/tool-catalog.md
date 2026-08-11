@@ -6,7 +6,7 @@ Owner: Orygn LLC
 
 This document is the contract for the Omnicord tool surface. Every tool the server exposes is listed here with its tier, destructiveness, required Discord permission, key parameters, and behavior. The implementation and the registry listings derive from this file. Change the contract here first, then change code.
 
-Totals: 151 tools implemented and shipped, 15 in the always-loaded core set and 136 loaded on demand. A few additional tools, notably application-command management, are specified in this contract but deferred and not yet shipped.
+Totals: 151 tools implemented and shipped. All of them load by default. `OMNICORD_TOOLS` narrows that to a chosen set of groups, with a core of 14 diagnostics and read tools always present; see [toolsets](toolsets.md) for the groups and what each one costs. A few additional tools, notably application-command management, are specified in this contract but deferred and not yet shipped.
 
 ## 1. Design conventions
 

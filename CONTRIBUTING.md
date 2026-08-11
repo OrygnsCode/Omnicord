@@ -70,6 +70,7 @@ src/
   config.ts           # Environment, .env, and bots.json loading; VERSION
   home.ts             # Config and data locations (OMNICORD_HOME)
   safety.ts           # The confirmation gate (gateDestructive)
+  toolsets.ts         # Tool groups and the OMNICORD_TOOLS selection
   envelope.ts         # The ok() / fail() output envelope
   http.ts             # Streamable HTTP transport and its security gates
   scheduler.ts        # Omnicord-side scheduled messages
@@ -196,9 +197,13 @@ protection, owner protection, and strict role hierarchy. See `canModerate` in
 8. Add coverage: unit tests for any pure logic, a registration assertion in
    `scripts/smoke.mjs`, and a live check in `scripts/acceptance.mjs` that cleans
    up whatever it creates.
-9. Update [docs/tool-catalog.md](./docs/tool-catalog.md). The catalog is the
-   contract, not an afterthought. Update the tool count there, in the smoke
-   test, in the README, and in `mcpb/manifest.json`.
+9. Add it to a group in [`src/toolsets.ts`](./src/toolsets.ts). Every tool
+   belongs to exactly one group, and the smoke suite fails if one is missing
+   or if a group names a tool that no longer exists. Pick the group an
+   operator would look in, which is not always the file you put the code in.
+10. Update [docs/tool-catalog.md](./docs/tool-catalog.md). The catalog is the
+    contract, not an afterthought. Update the tool count there, in the smoke
+    test, in the README, and in `mcpb/manifest.json`.
 
 ## Conventions
 
