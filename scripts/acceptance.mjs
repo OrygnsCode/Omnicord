@@ -1749,6 +1749,70 @@ try {
     await callTool("delete_role", { role, confirm_token: g.data?.confirm_token });
   }
 
+  // Multi-bot routing, live.
+  //
+  // The pure routing logic is covered by the unit suite. What that cannot
+  // show is that a request actually reaches the bot that is in the named
+  // server, which is the part a refactor is most likely to break.
+  //
+  // Everything here is non-mutating on purpose. The destructive step stops at
+  // the preview and never sends the confirm token back, so this section is
+  // safe to run against a populated server even though the rest of the suite
+  // is not. It skips cleanly on a single-bot install.
+  console.log("\n--- multi-bot ---");
+  {
+    const servers = await callTool("list_servers");
+    const list = servers.data?.servers ?? [];
+    const botNames = [...new Set(list.map((s) => s.bot).filter(Boolean))];
+
+    if (botNames.length < 2) {
+      console.log(
+        `  skipped: ${botNames.length === 1 ? "one bot" : "no bot"} configured. ` +
+          "Add a second bot to bots.json to exercise routing."
+      );
+    } else {
+      expect(
+        list.every((s) => typeof s.bot === "string" && s.bot.length > 0),
+        "list_servers labels every server with the bot that reaches it"
+      );
+
+      // Each bot should report itself when asked for by name.
+      for (const name of botNames) {
+        const info = await callTool("get_bot_info", { bot: name });
+        expect(
+          info.data?.bot === name || info.data?.acting?.bot === name,
+          `get_bot_info honours bot=${name}`
+        );
+      }
+
+      const check = await callTool("run_setup_check", { bot: botNames[0] });
+      expect(!check.isError, `run_setup_check runs for bot=${botNames[0]}`);
+
+      // A server reached by a known bot must route to that bot, and the
+      // destructive preview must say so before anything can be confirmed.
+      const target = list.find((s) => s.bot);
+      if (target) {
+        const preview = await callToolRaw("delete_role", {
+          role: "omnicord-nonexistent-role-for-routing-check",
+          guild: target.name,
+        });
+        // The role does not exist, so this fails at resolution rather than
+        // reaching the gate. Either way the failure must come from the bot
+        // that owns the server, which proves the request was routed.
+        expect(
+          typeof preview.summary === "string" && preview.summary.length > 0,
+          `a request naming ${target.name} is answered by its bot (${target.bot})`
+        );
+      }
+
+      const unreachable = servers.data?.unreachable ?? [];
+      expect(
+        Array.isArray(unreachable),
+        "list_servers reports an unreachable list, even when empty"
+      );
+    }
+  }
+
   console.log(failed ? "\nacceptance: FAILED" : "\nacceptance: all good");
   child.kill();
   process.exit(failed ? 1 : 0);

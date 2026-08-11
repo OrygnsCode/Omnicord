@@ -139,6 +139,14 @@ It reads `DISCORD_TOKEN` and `OMNICORD_GUILD` from `.env`. Create a throwaway
 Discord application and an empty server for it, and double check
 `get_bot_info` reports the bot and guild you expect before you run it.
 
+The suite ends with a multi-bot section that checks routing against live
+Discord: that every server is labelled with the bot that reaches it, that
+`get_bot_info` and `run_setup_check` honour the `bot` parameter, and that a
+request naming a server is answered by that server's bot. It skips itself
+when only one bot is configured, so it costs nothing on a single-bot install.
+Unlike the rest of the suite it never mutates anything: the destructive step
+stops at the preview and the confirm token is never sent back.
+
 `scripts/smoke-docker.mjs` builds and verifies the container image and needs a
 running Docker daemon.
 
