@@ -3,6 +3,7 @@ import { createRequire } from "node:module";
 import { existsSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
+import { selectToolsets, type ToolsetSelection } from "./toolsets.js";
 
 // Load .env from the working directory when present, then the package
 // root, then ~/.omnicord. The package-root fallback matters because MCP
@@ -55,6 +56,10 @@ export interface OmnicordConfig {
   // Optional default guild ID. Tools accept an explicit guild and fall
   // back to this.
   defaultGuild: string | undefined;
+  // Which tool groups this process exposes. Resolved from OMNICORD_TOOLS;
+  // unset means every group. Carries any unknown group names so the entry
+  // point can refuse to start instead of quietly exposing fewer tools.
+  toolsets: ToolsetSelection;
 }
 
 // Shape of a bots.json file. Hand-editable, and also written by the wizard.
@@ -161,5 +166,6 @@ export function loadConfig(): OmnicordConfig {
   const bots = buildBots(readBotsFile(), process.env.DISCORD_TOKEN);
   const defaultBot = bots.find((b) => b.isDefault);
   const defaultGuild = process.env.OMNICORD_GUILD?.trim() || undefined;
-  return { bots, token: defaultBot?.token, defaultGuild };
+  const toolsets = selectToolsets(process.env.OMNICORD_TOOLS);
+  return { bots, token: defaultBot?.token, defaultGuild, toolsets };
 }

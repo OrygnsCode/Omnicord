@@ -986,6 +986,67 @@ check(collide.some((b) => b.name === "main-2"), "addBotToBotsFile: a colliding n
 check(parseBotsFile(addBotToBotsFile("{ broken", { name: "main", token: "t1" })).length === 1, "addBotToBotsFile: a malformed existing file is treated as empty");
 }
 
+// toolsets: OMNICORD_TOOLS group selection
+{
+const { selectToolsets, unknownToolsetMessage, CORE_TOOLS, TOOLSETS, TOOLSET_NAMES } =
+  await import("../dist/toolsets.js");
+
+const all = selectToolsets(undefined);
+check(all.all === true, "selectToolsets: unset selects every group");
+check(all.unknown.length === 0, "selectToolsets: unset reports no unknown groups");
+check(all.tools.has("get_bot_info") && all.tools.has("ban_member") && all.tools.has("end_stage"), "selectToolsets: unset spans every group");
+check(selectToolsets("").all === true, "selectToolsets: empty string selects everything");
+check(selectToolsets("   ").all === true, "selectToolsets: whitespace selects everything");
+check(selectToolsets("all").all === true, "selectToolsets: \"all\" selects everything");
+check(selectToolsets("ALL").all === true, "selectToolsets: \"all\" is case insensitive");
+check(selectToolsets(undefined).tools.size === selectToolsets("all").tools.size, "selectToolsets: unset and \"all\" agree");
+
+const core = selectToolsets("core");
+check(core.all === false, "selectToolsets: naming a group turns off the everything default");
+check(core.groups.length === 0, "selectToolsets: core is not reported as an optional group");
+check(core.tools.size === CORE_TOOLS.length, "selectToolsets: core alone is just the core tools");
+check(core.tools.has("get_bot_info"), "selectToolsets: core includes diagnostics");
+check(!core.tools.has("send_message"), "selectToolsets: core excludes messaging");
+
+const msg = selectToolsets("messaging");
+check(msg.tools.has("get_bot_info"), "selectToolsets: core is always added");
+check(msg.tools.has("send_message"), "selectToolsets: the named group is included");
+check(!msg.tools.has("ban_member"), "selectToolsets: other groups stay out");
+check(msg.tools.size === CORE_TOOLS.length + TOOLSETS.messaging.length, "selectToolsets: core plus one group has the expected size");
+
+const two = selectToolsets("messaging,moderation");
+check(two.groups.length === 2, "selectToolsets: two groups are both selected");
+check(two.tools.has("send_message") && two.tools.has("ban_member"), "selectToolsets: both groups contribute");
+check(selectToolsets(" Messaging , MODERATION ").tools.size === two.tools.size, "selectToolsets: case and whitespace are tolerated");
+check(selectToolsets("messaging,messaging").groups.length === 1, "selectToolsets: a repeated group is not counted twice");
+check(selectToolsets("messaging,core").tools.size === msg.tools.size, "selectToolsets: listing core explicitly changes nothing");
+check(selectToolsets("messaging,,").groups.length === 1, "selectToolsets: empty entries are ignored");
+
+const bad = selectToolsets("messaging,nope,alsonope");
+check(bad.unknown.length === 2, "selectToolsets: unknown groups are collected");
+check(bad.groups.includes("messaging"), "selectToolsets: valid groups still resolve alongside unknown ones");
+check(unknownToolsetMessage(bad.unknown).includes("nope"), "unknownToolsetMessage: names the bad group");
+check(unknownToolsetMessage(bad.unknown).includes("messaging"), "unknownToolsetMessage: lists the valid groups");
+check(unknownToolsetMessage(["x"]).includes("group:"), "unknownToolsetMessage: singular for one bad name");
+check(unknownToolsetMessage(["x", "y"]).includes("groups:"), "unknownToolsetMessage: plural for several");
+
+// The map itself: no tool may be orphaned, duplicated, or invented. The
+// live count is asserted in the smoke suite, which has a real server.
+const seen = new Map();
+let dupes = 0;
+for (const n of CORE_TOOLS) seen.set(n, "core");
+for (const g of TOOLSET_NAMES) {
+  for (const n of TOOLSETS[g]) {
+    if (seen.has(n)) dupes += 1;
+    seen.set(n, g);
+  }
+}
+check(dupes === 0, "toolsets: no tool appears in more than one group");
+check(seen.size === selectToolsets("all").tools.size, "toolsets: the group map and the everything selection agree");
+check(TOOLSET_NAMES.every((g) => TOOLSETS[g].length > 0), "toolsets: no group is empty");
+check(!TOOLSET_NAMES.includes("core"), "toolsets: core is not listed as an optional group");
+}
+
 if (failures > 0) {
   console.error(`\nunit: ${failures} failure(s)`);
   process.exit(1);

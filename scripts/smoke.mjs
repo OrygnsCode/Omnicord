@@ -171,6 +171,21 @@ try {
   }
   assert(names.length >= 151, `tool count is at least 151 (got ${names.length})`);
 
+  // The toolset map is only useful if it matches the tools that actually get
+  // registered. The unit suite proves the map is internally consistent; this
+  // proves it describes this server, so a tool added without a group, or a
+  // group naming a tool that was renamed, fails here.
+  {
+    const { CORE_TOOLS, TOOLSETS, TOOLSET_NAMES } = await import("../dist/toolsets.js");
+    const mapped = new Set(CORE_TOOLS);
+    for (const g of TOOLSET_NAMES) for (const n of TOOLSETS[g]) mapped.add(n);
+    const orphans = names.filter((n) => !mapped.has(n));
+    const phantoms = [...mapped].filter((n) => !names.includes(n));
+    assert(orphans.length === 0, `every registered tool belongs to a toolset${orphans.length ? ` (orphans: ${orphans.join(", ")})` : ""}`);
+    assert(phantoms.length === 0, `no toolset names a tool that is not registered${phantoms.length ? ` (missing: ${phantoms.join(", ")})` : ""}`);
+    assert(mapped.size === names.length, `the toolset map covers all ${names.length} tools (map has ${mapped.size})`);
+  }
+
   async function callTool(name, args) {
     const res = await request("tools/call", { name, arguments: args });
     const envelope = JSON.parse(res.result?.content?.[0]?.text ?? "{}");

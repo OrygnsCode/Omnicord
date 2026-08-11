@@ -46,6 +46,15 @@ if (process.argv[2] === "init") {
 }
 
 const config = loadConfig();
+
+// A misspelled group would otherwise look like tools going missing at
+// random, so refuse to start and name the valid groups instead.
+if (config.toolsets.unknown.length > 0) {
+  const { unknownToolsetMessage } = await import("./toolsets.js");
+  console.error(unknownToolsetMessage(config.toolsets.unknown));
+  process.exit(1);
+}
+
 const { http, port, host } = parseArgs(process.argv);
 
 // The gateway connects in the background: presence goes online and event
@@ -67,6 +76,9 @@ if (http) {
   await server.connect(transport);
   console.error(
     `omnicord v${VERSION} on stdio` +
+      (config.toolsets.all
+        ? ""
+        : ` (toolsets: core, ${config.toolsets.groups.join(", ")})`) +
       (config.token ? "" : " (no DISCORD_TOKEN set, diagnostics will say so)")
   );
 }

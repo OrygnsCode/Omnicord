@@ -23,11 +23,55 @@ import { registerStructureTools } from "./tools/structure.js";
 import { registerStageTools } from "./tools/stages.js";
 import { registerRosterTools } from "./tools/roster.js";
 
+// Applies the toolset selection without touching the tool modules.
+//
+// Every module reaches for exactly one method on the server, registerTool,
+// and none of them uses its return value. So the whole filter is a proxy that
+// drops registrations for tools outside the selection and forwards everything
+// else untouched. Tools that are filtered out are never registered at all,
+// which keeps them out of tools/list and out of the client's context.
+//
+// The stub stands in for the RegisteredTool a caller would normally get back.
+// Nothing reads it today; returning a disabled handle rather than undefined
+// means a future caller that does read it finds something coherent.
+function applyToolsets(server: McpServer, allowed: ReadonlySet<string>): McpServer {
+  const stub = {
+    enabled: false,
+    enable() {},
+    disable() {},
+    remove() {},
+    update() {},
+  } as unknown as ReturnType<McpServer["registerTool"]>;
+
+  return new Proxy(server, {
+    get(target, prop) {
+      if (prop === "registerTool") {
+        return (name: string, ...rest: unknown[]) => {
+          if (!allowed.has(name)) return stub;
+          return (
+            target.registerTool as unknown as (
+              n: string,
+              ...r: unknown[]
+            ) => ReturnType<McpServer["registerTool"]>
+          )(name, ...rest);
+        };
+      }
+      // Read and bind against the real server, never the proxy, so getters
+      // and methods that touch private fields still resolve.
+      const value = Reflect.get(target, prop, target);
+      return typeof value === "function" ? value.bind(target) : value;
+    },
+  });
+}
+
 // Builds a fully wired McpServer. A factory rather than a singleton
 // because the Streamable HTTP transport needs one server instance per
 // session, while stdio needs exactly one for the process lifetime.
 export function buildServer(config: OmnicordConfig): McpServer {
-  const server = new McpServer({ name: "omnicord", version: VERSION });
+  const real = new McpServer({ name: "omnicord", version: VERSION });
+  // With no OMNICORD_TOOLS set the selection holds every tool, so this is a
+  // pass-through and the registered surface is identical to before.
+  const server = applyToolsets(real, config.toolsets.tools);
   registerDiagnostics(server, config);
   registerReadTools(server, config);
   registerWriteTools(server, config);
@@ -50,5 +94,6 @@ export function buildServer(config: OmnicordConfig): McpServer {
   registerStructureTools(server, config);
   registerStageTools(server, config);
   registerRosterTools(server, config);
-  return server;
+  // Hand back the real server: the proxy exists only to gate registration.
+  return real;
 }
