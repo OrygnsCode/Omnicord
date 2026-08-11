@@ -10,7 +10,7 @@ is planned.
 - [Multiple bots](multi-bot.md): running several bots, one per server, from
   a single install.
 - [Toolsets](toolsets.md): loading only the tool groups a session needs,
-  instead of all 151.
+  instead of all 155.
 - [Connecting AI clients](clients.md): exact configuration for Claude
   Desktop, Claude Code, Cursor, Windsurf, ChatGPT, and any other MCP
   client.

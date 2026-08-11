@@ -183,8 +183,13 @@ const OPTIONAL: Record<string, readonly string[]> = {
     "delete_soundboard_sound",
   ],
 
-  // Server-wide settings: the guild itself, onboarding, templates, presence.
+  // Server-wide settings and the application itself: the guild, onboarding,
+  // templates, presence, and the bot's slash commands.
   server: [
+    "list_app_commands",
+    "register_app_command",
+    "update_app_command",
+    "delete_app_command",
     "update_server",
     "get_server_preview",
     "get_server_widget",

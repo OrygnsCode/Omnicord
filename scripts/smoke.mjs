@@ -169,7 +169,17 @@ try {
   ]) {
     assert(names.includes(t), `${t} is registered`);
   }
-  assert(names.length >= 151, `tool count is at least 151 (got ${names.length})`);
+  for (const t of [
+    "list_app_commands", "register_app_command", "update_app_command", "delete_app_command",
+  ]) {
+    assert(names.includes(t), `${t} is registered`);
+  }
+  const delCmdMeta = (tools.result?.tools ?? []).find((t) => t.name === "delete_app_command");
+  assert(delCmdMeta?.annotations?.destructiveHint === true, "delete_app_command carries destructiveHint");
+  const listCmdMeta = (tools.result?.tools ?? []).find((t) => t.name === "list_app_commands");
+  assert(listCmdMeta?.annotations?.readOnlyHint === true, "list_app_commands is read only");
+
+  assert(names.length >= 155, `tool count is at least 155 (got ${names.length})`);
 
   // The toolset map is only useful if it matches the tools that actually get
   // registered. The unit suite proves the map is internally consistent; this

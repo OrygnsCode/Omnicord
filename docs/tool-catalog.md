@@ -6,7 +6,7 @@ Owner: Orygn LLC
 
 This document is the contract for the Omnicord tool surface. Every tool the server exposes is listed here with its tier, destructiveness, required Discord permission, key parameters, and behavior. The implementation and the registry listings derive from this file. Change the contract here first, then change code.
 
-Totals: 151 tools implemented and shipped. All of them load by default. `OMNICORD_TOOLS` narrows that to a chosen set of groups, with a core of 14 diagnostics and read tools always present; see [toolsets](toolsets.md) for the groups and what each one costs. A few additional tools, notably application-command management, are specified in this contract but deferred and not yet shipped.
+Totals: 155 tools implemented and shipped. All of them load by default. `OMNICORD_TOOLS` narrows that to a chosen set of groups, with a core of 14 diagnostics and read tools always present; see [toolsets](toolsets.md) for the groups and what each one costs.
 
 ## 1. Design conventions
 
@@ -347,10 +347,10 @@ The 15 always-loaded tools. Chosen so that the two headline flows (chat and oper
 
 | Tool | D | Requires | Key parameters | Summary |
 |---|---|---|---|---|
-| list_app_commands | no | app owner | guild (optional, else global) | Registered slash commands. |
-| register_app_command | no | app owner | name, description, options[], guild | Registers a slash command. |
-| update_app_command | no | app owner | command, fields | Edits a command. |
-| delete_app_command | yes | app owner | command | Unregisters a command. |
+| list_app_commands | no | app owner | guild (optional, else global), bot | Registered slash commands. Guild and global sets are separate lists. |
+| register_app_command | no | app owner | name, description, options[], guild, bot | Registers a slash command, or updates it in place when the name already exists. Guild commands appear immediately; global ones can take an hour and are rate limited per day. Required options are sent before optional ones, as Discord requires. Subcommands and subcommand groups are not supported. |
+| update_app_command | no | app owner | command, description, options[], guild, bot | Edits a command by name or ID. Sending options replaces the whole list. |
+| delete_app_command | yes | app owner | command, guild, bot | Unregisters a command. Registering it again restores it. |
 | set_bot_presence | no | none | status (online, idle, dnd, invisible), activity_type, activity_text | Sets the bot's presence. |
 | get_bot_info | no | none | bot (optional) | Application info, guild count, enabled intents, library and Omnicord versions. The first diagnostics stop. Pass bot to inspect a specific bot when several are configured. |
 

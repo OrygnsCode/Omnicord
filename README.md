@@ -165,7 +165,7 @@ configured in a `bots.json` in the same directory; see
 |---|---|
 | `DISCORD_TOKEN` | The bot token. Required for anything real; the server boots without it and the diagnostics explain what to fix. |
 | `OMNICORD_GUILD` | Optional default server ID so tools can omit the guild parameter. |
-| `OMNICORD_TOOLS` | Which tool groups to load. Unset loads all 151. See [Toolsets](docs/toolsets.md). |
+| `OMNICORD_TOOLS` | Which tool groups to load. Unset loads all 155. See [Toolsets](docs/toolsets.md). |
 | `OMNICORD_SAFE_MODE` | Default on. Destructive tools preview first and require a confirm token; set to `false` only for trusted automation. |
 | `OMNICORD_GATEWAY` | Default on when a token is set: the bot shows as online and real time event subscriptions work. Set to `off` for REST only operation. |
 | `OMNICORD_HOME` | Optional. One directory to hold `.env`, `bots.json`, and saved data. Defaults to the package root for a source checkout, `.omnicord` in your user folder for an installed copy. |
@@ -205,7 +205,7 @@ variable overrides all of them.
 | [Troubleshooting](docs/troubleshooting.md) | Common problems and their fixes. |
 | [Security whitepaper](docs/security-whitepaper.md) | Plain language: what Omnicord can and cannot touch, for whoever decides whether to install it. |
 | [SECURITY.md](SECURITY.md) | The engineering level threat model and audit findings. |
-| [Tool catalog](docs/tool-catalog.md) | The full contract of all 151 tools. |
+| [Tool catalog](docs/tool-catalog.md) | The full contract of all 155 tools. |
 
 The docs are written to be read by AI assistants too: paste a page at
 your AI and have it walk you through.

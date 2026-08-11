@@ -22,6 +22,7 @@ import { registerPermissionTools } from "./tools/permissions.js";
 import { registerStructureTools } from "./tools/structure.js";
 import { registerStageTools } from "./tools/stages.js";
 import { registerRosterTools } from "./tools/roster.js";
+import { registerAppCommandTools } from "./tools/appCommands.js";
 
 // Applies the toolset selection without touching the tool modules.
 //
@@ -94,6 +95,7 @@ export function buildServer(config: OmnicordConfig): McpServer {
   registerStructureTools(server, config);
   registerStageTools(server, config);
   registerRosterTools(server, config);
+  registerAppCommandTools(server, config);
   // Hand back the real server: the proxy exists only to gate registration.
   return real;
 }
