@@ -1,5 +1,7 @@
 # Omnicord
 
+Discord server management MCP for AI agents.
+
 [![CI](https://github.com/OrygnsCode/Omnicord/actions/workflows/ci.yml/badge.svg)](https://github.com/OrygnsCode/Omnicord/actions/workflows/ci.yml)
 [![npm](https://img.shields.io/npm/v/%40orygn%2Fomnicord)](https://www.npmjs.com/package/@orygn/omnicord)
 [![Glama score](https://glama.ai/mcp/servers/OrygnsCode/Omnicord/badges/score.svg)](https://glama.ai/mcp/servers/OrygnsCode/Omnicord)

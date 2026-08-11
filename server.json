@@ -1,7 +1,7 @@
 {
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "io.github.OrygnsCode/omnicord",
-  "description": "Your AI runs your Discord server: chat, moderation, admin, even building it all from one brief.",
+  "description": "Discord server management MCP for AI agents: chat, moderation, admin, and full server building.",
   "repository": {
     "url": "https://github.com/OrygnsCode/Omnicord",
     "source": "github"

@@ -1,7 +1,7 @@
 {
   "name": "@orygn/omnicord",
   "version": "1.2.1",
-  "description": "Omnicord: an MCP server for Discord. Chat, moderate, administrate, and build out entire servers through any MCP client.",
+  "description": "Omnicord: a Discord server management MCP for AI agents. Chat, moderate, administrate, and build out entire servers from one brief, through any MCP client.",
   "type": "module",
   "license": "Elastic-2.0",
   "author": "Orygn LLC",
