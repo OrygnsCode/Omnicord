@@ -89,7 +89,7 @@ In stdio mode the startup line on stderr also names the active groups, so you
 can confirm what a session loaded:
 
 ```
-omnicord v1.2.1 on stdio (toolsets: core, messaging, moderation)
+omnicord v1.3.0 on stdio (toolsets: core, messaging, moderation)
 ```
 
 ## Adding a tool

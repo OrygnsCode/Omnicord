@@ -4,6 +4,59 @@ All notable changes to Omnicord are recorded here. The format follows
 Keep a Changelog, and the project follows semantic versioning. Version
 1.0.0 marked the public launch; releases since follow semver.
 
+## 1.3.0 (2026-08-11)
+
+Adds toolsets, so a session can load only the tools it needs, and ships the
+four application command tools the catalog has specified since it was written.
+Existing setups are unaffected: with no new configuration the tool surface is
+byte for byte what it was.
+
+### Added
+
+- **Toolsets.** `OMNICORD_TOOLS` selects which groups of tools load:
+  `messaging`, `moderation`, `structure`, `builder`, `threads`, `forums`,
+  `community`, `server`, and `realtime`. A `core` group of diagnostics and
+  read tools is always present, because without it the server cannot say which
+  servers it reaches or whether setup worked.
+
+  Every tool definition a client loads costs context before the user types
+  anything, and a large tool surface measurably hurts tool selection. The full
+  set is 155 tools and about 125 KB of JSON on every request. Loading only
+  `messaging` and `moderation` is 52 tools and 43 KB, roughly 20,000 fewer
+  tokens per conversation. Leaving the variable unset loads everything, as
+  before. A group name that does not exist stops startup and lists the valid
+  ones rather than quietly exposing a smaller surface. See
+  [docs/toolsets.md](docs/toolsets.md).
+- **Slash command management**: `list_app_commands`, `register_app_command`,
+  `update_app_command`, and `delete_app_command`. Registering without a guild
+  targets the global set; passing a guild targets that server and appears
+  immediately, which is the practical way to iterate, since global commands
+  take up to an hour to propagate and are rate limited per day. Registering a
+  name that already exists updates it in place rather than creating a
+  duplicate. `delete_app_command` runs through the confirmation gate.
+  Subcommands and subcommand groups are not supported.
+
+  Tool count moves from 151 to 155.
+
+### Changed
+
+- `zod` moves to 4. Three parameters that would have emitted a less useful
+  schema under it, the thread auto archive durations and the server AFK
+  timeout, now use a multi-value literal and emit a plain enum again. The
+  blueprint tools inline their channel definition instead of pointing at it
+  with a `$ref`, which helps clients that do not resolve references.
+- The tool catalog no longer claims that 15 tools are always loaded and 136
+  load on demand. That was never true; every tool was registered on every
+  start. It now describes what actually happens.
+
+### Security
+
+- Three advisories published since 1.2.1 are resolved: `ip-address` (high, an
+  SSRF and trust boundary bypass, reached through `express-rate-limit`), `hono`
+  (moderate, four including a denial of service in CORS handling), and `undici`
+  at the version the existing override pinned. Lockfile only. A production
+  `npm audit` reports zero vulnerabilities.
+
 ## 1.2.1 (2026-08-02)
 
 A dependency release. No tool changes and no behavior changes.
