@@ -1776,13 +1776,12 @@ try {
         "list_servers labels every server with the bot that reaches it"
       );
 
-      // Each bot should report itself when asked for by name.
+      // Each bot should report itself when asked for by name. get_bot_info
+      // returns bot as an object: { id, username, name }, where name is the
+      // configured bot name.
       for (const name of botNames) {
         const info = await callTool("get_bot_info", { bot: name });
-        expect(
-          info.data?.bot === name || info.data?.acting?.bot === name,
-          `get_bot_info honours bot=${name}`
-        );
+        expect(info.data?.bot?.name === name, `get_bot_info honours bot=${name}`);
       }
 
       const check = await callTool("run_setup_check", { bot: botNames[0] });
