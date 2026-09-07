@@ -49,6 +49,21 @@ export class UnknownRoleError extends Error {
   }
 }
 
+// Naming @everyone in private_to asks to hide a channel from everyone and
+// then show it to everyone. Discord resolves the overlap in favor of the
+// allow, so the channel comes out fully public: the one outcome nobody
+// asking for a private channel wants, arrived at silently. Refusing is the
+// safer answer.
+export class EveryoneRoleError extends Error {
+  constructor(field: string) {
+    super(
+      `@everyone cannot be listed in ${field}. It would grant back the ` +
+        "same access the restriction removes, leaving the channel open to " +
+        "the whole server. List only the roles that should have access."
+    );
+  }
+}
+
 export function compileOverwrites(
   input: VisibilityInput,
   roleIdsByName: Map<string, string>,
@@ -81,23 +96,31 @@ export function compileOverwrites(
     types.set(id, type);
   }
 
-  function roleId(name: string): string {
+  function roleId(name: string, field: string): string {
     const id = roleIdsByName.get(name.toLowerCase());
     if (!id) throw new UnknownRoleError(name);
+    // The default role's id is the guild id, whatever it happens to be
+    // named, so this catches every spelling of it.
+    if (id === guildId) throw new EveryoneRoleError(field);
     return id;
   }
 
   if (effectivePrivate.length > 0) {
     add(deny, guildId, viewBits, 0);
     for (const name of effectivePrivate) {
-      add(allow, roleId(name), viewBits, 0);
+      add(allow, roleId(name, "private_to"), viewBits, 0);
     }
   }
 
   if (readOnly) {
     add(deny, guildId, SEND_FAMILY, 0);
     for (const name of postingRoles) {
-      add(allow, roleId(name), P.SendMessages | P.SendMessagesInThreads, 0);
+      add(
+        allow,
+        roleId(name, "posting_roles"),
+        P.SendMessages | P.SendMessagesInThreads,
+        0
+      );
     }
   }
 

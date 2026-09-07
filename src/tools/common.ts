@@ -28,6 +28,10 @@ import {
   computeGuildPermissions,
 } from "../discord/preflight.js";
 import { resolveOne } from "../discord/resolve.js";
+import {
+  COMPONENTS_V2_FLAG,
+  textFromComponents,
+} from "../discord/components.js";
 import { fail } from "../envelope.js";
 
 // Helpers shared by every tool module: guild entry, entity resolution,
@@ -389,6 +393,10 @@ const SYSTEM_CONTENT: Record<number, string> = {
 };
 
 export function digestMessage(m: APIMessage) {
+  // A Components V2 message keeps its words in components rather than in
+  // content, so read it out of there or the message digests as blank.
+  const isV2 = ((m.flags ?? 0) & COMPONENTS_V2_FLAG) !== 0;
+  const fromComponents = isV2 ? textFromComponents(m.components) : "";
   return {
     id: m.id,
     author: {
@@ -396,7 +404,8 @@ export function digestMessage(m: APIMessage) {
       name: m.author.global_name ?? m.author.username,
       bot: m.author.bot ?? false,
     },
-    content: m.content || SYSTEM_CONTENT[m.type] || "",
+    content: m.content || fromComponents || SYSTEM_CONTENT[m.type] || "",
+    ...(isV2 ? { components_v2: true } : {}),
     created_at: m.timestamp,
     edited: Boolean(m.edited_timestamp),
     attachments: (m.attachments ?? []).map((a) => a.filename),

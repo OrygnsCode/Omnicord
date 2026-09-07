@@ -128,6 +128,22 @@ try {
   assert(names.includes("set_bot_presence"), "set_bot_presence is registered");
   assert(names.includes("update_onboarding"), "update_onboarding is registered");
   assert(names.includes("create_sticker"), "create_sticker is registered");
+
+  // The schema, not just the name: a compiler with no parameter wired to it
+  // passes every unit test and is unreachable from a client.
+  const byName = new Map((tools.result?.tools ?? []).map((t) => [t.name, t]));
+  const props = (n) => Object.keys(byName.get(n)?.inputSchema?.properties ?? {});
+  assert(props("send_message").includes("components"), "send_message exposes components");
+  assert(props("edit_message").includes("components"), "edit_message exposes components");
+  assert(!byName.get("send_message").inputSchema.required?.includes("content"),
+    "send_message content is optional now that components can replace it");
+  for (const p of ["private_to", "read_only", "posting_roles"]) {
+    assert(props("create_channel").includes(p), `create_channel exposes ${p}`);
+  }
+  const block = byName.get("send_message").inputSchema.properties.components.items;
+  assert(block.properties.type.enum.includes("container"), "a component block can be a container");
+  assert(!block.properties.components.items.properties.type.enum.includes("container"),
+    "a nested component block cannot be a container");
   assert(names.includes("create_soundboard_sound"), "create_soundboard_sound is registered");
 
   // Without a token the gateway is off; subscribing must explain that

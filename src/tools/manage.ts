@@ -24,6 +24,12 @@ import {
   ALL_PERMISSIONS,
 } from "../discord/preflight.js";
 import { resolveOne } from "../discord/resolve.js";
+import {
+  compileComponents,
+  componentsParam,
+  COMPONENTS_V2_FLAG,
+  type ComponentBlock,
+} from "../discord/components.js";
 import { gateDestructive } from "../safety.js";
 import { ok, fail } from "../envelope.js";
 import {
@@ -458,17 +464,39 @@ export function registerManageTools(
       title: "Edit message",
       description:
         "Edit a message the bot itself sent. Discord does not allow " +
-        "editing anyone else's messages, no matter the permission level.",
+        "editing anyone else's messages, no matter the permission level. A " +
+        "message sent as a Components V2 layout stays one: edit it with " +
+        "components, never with content or embeds.",
       inputSchema: {
         channel: z.string().describe("Channel name or ID."),
         guild: guildParam,
         message_id: z.string(),
         content: z.string().min(1).max(2000).optional(),
         embeds: embedsParam,
+        components: componentsParam,
       },
       annotations: { readOnlyHint: false, destructiveHint: false },
     },
-    guarded(async ({ channel, guild, message_id, content, embeds }) => {
+    guarded(async ({ channel, guild, message_id, content, embeds, components }) => {
+      // Everything decidable from the arguments alone is decided first, so a
+      // malformed call costs no API requests.
+      const layout = components as ComponentBlock[] | undefined;
+      if (content === undefined && embeds === undefined && layout === undefined) {
+        return fail("Pass content, embeds, or components to change.");
+      }
+      if (layout && (content !== undefined || embeds !== undefined)) {
+        return fail(
+          "components cannot be combined with content or embeds. A " +
+            "Components V2 message renders neither."
+        );
+      }
+
+      let compiled: ReturnType<typeof compileComponents> | undefined;
+      if (layout) {
+        compiled = compileComponents(layout);
+        if (!compiled.ok) return fail(compiled.reason);
+      }
+
       const { rest, guildId } = await enter(config, guild);
       const target = await resolveChannel(
         rest,
@@ -476,9 +504,6 @@ export function registerManageTools(
         channel,
         TEXT_BEARING_TYPES
       );
-      if (content === undefined && embeds === undefined) {
-        return fail("Pass content or embeds to change.");
-      }
 
       const message = (await rest.get(
         Routes.channelMessage(target.id, message_id)
@@ -492,10 +517,30 @@ export function registerManageTools(
         );
       }
 
+      // The Components V2 flag is decided when a message is sent and can
+      // never be added or removed afterward, so the two kinds of message
+      // are not interchangeable. Both mismatches are caught here, where the
+      // message is already in hand, rather than left to a bare 400.
+      const isV2 = ((message.flags ?? 0) & COMPONENTS_V2_FLAG) !== 0;
+      if (isV2 && !layout) {
+        return fail(
+          "That message was sent as a Components V2 layout, so it renders " +
+            "neither content nor embeds. Edit it with components instead."
+        );
+      }
+      if (!isV2 && layout) {
+        return fail(
+          "That message was sent as an ordinary message, and Discord does " +
+            "not allow adding the Components V2 flag to an existing " +
+            "message. Send a new message with components and delete this one."
+        );
+      }
+
       await rest.patch(Routes.channelMessage(target.id, message_id), {
         body: {
           ...(content !== undefined ? { content } : {}),
           ...(embeds !== undefined ? { embeds: mapEmbeds(embeds) } : {}),
+          ...(compiled?.ok ? { components: compiled.components } : {}),
         },
       });
 

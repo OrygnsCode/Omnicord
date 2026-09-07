@@ -398,6 +398,46 @@ try {
 }
 check(threw, "unknown role name throws UnknownRoleError");
 
+// @everyone in private_to would deny view to everyone and then allow it
+// back to everyone, which Discord resolves as fully public. The default
+// role is identified by its id matching the guild id, so this holds no
+// matter what the role is called.
+const everyoneMap = new Map([["mod", ROLE_MOD], ["@everyone", GUILD]]);
+let everyoneThrew = null;
+try {
+  compileOverwrites({ kind: "text", privateTo: ["@everyone"] }, everyoneMap, GUILD, BOT_ID);
+} catch (err) {
+  everyoneThrew = err;
+}
+check(everyoneThrew?.constructor.name === "EveryoneRoleError", "@everyone in private_to throws EveryoneRoleError");
+check(everyoneThrew?.message.includes("private_to"), "the @everyone error names the field it came from");
+
+let postingEveryone = null;
+try {
+  compileOverwrites(
+    { kind: "text", readOnly: true, postingRoles: ["@everyone"] },
+    everyoneMap, GUILD, BOT_ID
+  );
+} catch (err) {
+  postingEveryone = err;
+}
+check(postingEveryone?.constructor.name === "EveryoneRoleError", "@everyone in posting_roles throws too");
+check(postingEveryone?.message.includes("posting_roles"), "the posting_roles error names its own field");
+
+const renamedDefault = new Map([["everybody", GUILD]]);
+let renamedThrew = false;
+try {
+  compileOverwrites({ kind: "text", privateTo: ["everybody"] }, renamedDefault, GUILD, BOT_ID);
+} catch (err) {
+  renamedThrew = err.constructor.name === "EveryoneRoleError";
+}
+check(renamedThrew, "a renamed default role is still caught by id");
+
+check(
+  compileOverwrites({ kind: "text", privateTo: ["Mod"] }, everyoneMap, GUILD, BOT_ID).length === 3,
+  "a real role next to @everyone in the map still compiles"
+);
+
 check(privText[0].id === GUILD, "everyone overwrite emitted first");
 check(privText[privText.length - 1].id === BOT_ID, "bot overwrite emitted last");
 
@@ -1097,6 +1137,201 @@ check(dupes === 0, "toolsets: no tool appears in more than one group");
 check(seen.size === selectToolsets("all").tools.size, "toolsets: the group map and the everything selection agree");
 check(TOOLSET_NAMES.every((g) => TOOLSETS[g].length > 0), "toolsets: no group is empty");
 check(!TOOLSET_NAMES.includes("core"), "toolsets: core is not listed as an optional group");
+}
+
+// Components V2 compiler
+
+{
+const { compileComponents, COMPONENTS_V2_FLAG, MAX_TOTAL_COMPONENTS } =
+  await import("../dist/discord/components.js");
+
+check(COMPONENTS_V2_FLAG === 32768, "the Components V2 flag is 1 << 15");
+check(MAX_TOTAL_COMPONENTS === 40, "the component cap is the documented 40");
+
+const text = compileComponents([{ type: "text", text: "hello" }]);
+check(text.ok && text.components[0].type === 10, "text compiles to a Text Display");
+check(text.ok && text.components[0].content === "hello", "text carries its content");
+check(text.ok && text.count === 1, "a text block counts as one component");
+check(text.ok && text.hasMedia === false, "plain text is not media");
+
+const sep = compileComponents([{ type: "separator" }]);
+check(sep.ok && sep.components[0].type === 14, "separator compiles to a Separator");
+check(sep.ok && !("divider" in sep.components[0]), "an unset divider is left to the API default");
+check(sep.ok && !("spacing" in sep.components[0]), "unset spacing is left to the API default");
+
+// false is a meaningful value here, not an absent one, so it must survive.
+const noRule = compileComponents([{ type: "separator", divider: false }]);
+check(noRule.ok && noRule.components[0].divider === false, "divider false is sent, not dropped as falsy");
+
+const wide = compileComponents([{ type: "separator", spacing: "large" }]);
+check(wide.ok && wide.components[0].spacing === 2, "large spacing maps to 2");
+const narrow = compileComponents([{ type: "separator", spacing: "small" }]);
+check(narrow.ok && narrow.components[0].spacing === 1, "small spacing maps to 1");
+
+const gallery = compileComponents([
+  { type: "gallery", media: [{ url: "https://example.com/a.png", description: "alt" }] },
+]);
+check(gallery.ok && gallery.components[0].type === 12, "gallery compiles to a Media Gallery");
+check(gallery.ok && gallery.components[0].items[0].media.url === "https://example.com/a.png", "gallery wraps the url in a media object");
+check(gallery.ok && gallery.components[0].items[0].description === "alt", "gallery keeps alt text");
+check(gallery.ok && gallery.count === 1, "a gallery is one component whatever it holds");
+check(gallery.ok && gallery.hasMedia, "a gallery reports media, which drives the Embed Links check");
+
+const row = compileComponents([
+  { type: "buttons", buttons: [
+    { label: "Docs", url: "https://example.com" },
+    { label: "Rules", url: "https://example.com/r" },
+  ] },
+]);
+check(row.ok && row.components[0].type === 1, "buttons compile to an Action Row");
+check(row.ok && row.components[0].components[0].type === 2, "row children are buttons");
+check(row.ok && row.components[0].components[0].style === 5, "every button is a link button");
+check(row.ok && row.components[0].components[0].url === "https://example.com", "the link button carries its url");
+check(row.ok && !("custom_id" in row.components[0].components[0]), "no custom_id is ever emitted");
+check(row.ok && row.count === 3, "a row counts as itself plus each button");
+
+const secThumb = compileComponents([
+  { type: "section", text: "body", media: [{ url: "https://example.com/t.png" }] },
+]);
+check(secThumb.ok && secThumb.components[0].type === 9, "section compiles to a Section");
+check(secThumb.ok && secThumb.components[0].accessory.type === 11, "one media entry becomes a Thumbnail accessory");
+check(secThumb.ok && secThumb.components[0].components[0].type === 10, "the section body is a Text Display");
+check(secThumb.ok && secThumb.count === 3, "a section counts as three components");
+check(secThumb.ok && secThumb.hasMedia, "a section thumbnail counts as media");
+
+const secBtn = compileComponents([
+  { type: "section", text: "body", buttons: [{ label: "Go", url: "https://example.com" }] },
+]);
+check(secBtn.ok && secBtn.components[0].accessory.type === 2, "one button entry becomes a Button accessory");
+check(secBtn.ok && secBtn.components[0].accessory.style === 5, "the section accessory is a link button");
+check(secBtn.ok && secBtn.hasMedia === false, "a button accessory is not media");
+
+const secBoth = compileComponents([
+  { type: "section", text: "b", media: [{ url: "https://example.com/t.png" }], buttons: [{ label: "Go", url: "https://example.com" }] },
+]);
+check(!secBoth.ok && secBoth.reason.includes("not both"), "a section with two accessories is refused");
+const secNeither = compileComponents([{ type: "section", text: "b" }]);
+check(!secNeither.ok && secNeither.reason.includes("neither"), "a section with no accessory is refused");
+const secManyThumbs = compileComponents([
+  { type: "section", text: "b", media: [{ url: "https://e.com/1.png" }, { url: "https://e.com/2.png" }] },
+]);
+check(!secManyThumbs.ok && secManyThumbs.reason.includes("gallery"), "a section with several images points at gallery");
+
+const container = compileComponents([
+  { type: "container", accent_color: "#5865f2", components: [
+    { type: "text", text: "inside" },
+    { type: "separator" },
+  ] },
+]);
+check(container.ok && container.components[0].type === 17, "container compiles to a Container");
+check(container.ok && container.components[0].accent_color === 5793266, "accent_color becomes the integer the API wants");
+check(container.ok && container.components[0].components.length === 2, "container keeps its children in order");
+check(container.ok && container.components[0].components[0].type === 10, "container children compile too");
+check(container.ok && container.count === 3, "a container counts as itself plus its children");
+check(container.ok && !("spoiler" in container.components[0]), "spoiler is omitted when not asked for");
+
+const spoiled = compileComponents([
+  { type: "container", spoiler: true, components: [{ type: "text", text: "x" }] },
+]);
+check(spoiled.ok && spoiled.components[0].spoiler === true, "container spoiler is passed through");
+
+const nested = compileComponents([
+  { type: "container", components: [{ type: "container", components: [{ type: "text", text: "x" }] }] },
+]);
+check(!nested.ok && nested.reason.includes("do not nest"), "containers cannot nest");
+
+const emptyContainer = compileComponents([{ type: "container", components: [] }]);
+check(!emptyContainer.ok, "an empty container is refused");
+
+const badHex = compileComponents([
+  { type: "container", accent_color: "blurple", components: [{ type: "text", text: "x" }] },
+]);
+check(!badHex.ok && badHex.reason.includes("#5865f2"), "a non-hex accent_color is refused with an example");
+
+const stray = compileComponents([{ type: "text", text: "x", accent_color: "#ffffff" }]);
+check(!stray.ok && stray.reason.includes("accent_color"), "a field the block type ignores is reported, not dropped");
+const strayNested = compileComponents([
+  { type: "container", components: [{ type: "gallery", media: [{ url: "https://e.com/a.png" }], text: "no" }] },
+]);
+check(!strayNested.ok && strayNested.reason.includes("inside it"), "a stray field inside a container names its position");
+
+check(!compileComponents([]).ok, "an empty layout is refused");
+check(!compileComponents([{ type: "text" }]).ok, "a text block with no text is refused");
+check(!compileComponents([{ type: "gallery" }]).ok, "a gallery with no media is refused");
+check(!compileComponents([{ type: "buttons" }]).ok, "a buttons block with no buttons is refused");
+
+// Seven full rows are only seven top-level blocks but 42 components, which
+// is how the cap is actually reached in practice.
+const sevenRows = Array.from({ length: 7 }, () => ({
+  type: "buttons",
+  buttons: Array.from({ length: 5 }, (_, i) => ({ label: `b${i}`, url: "https://example.com" })),
+}));
+const over = compileComponents(sevenRows);
+check(!over.ok && over.reason.includes("42"), "the cap counts nested components, not top-level blocks");
+
+const exactly = compileComponents([
+  ...sevenRows.slice(0, 6),
+  { type: "text", text: "a" },
+  { type: "text", text: "b" },
+  { type: "text", text: "c" },
+  { type: "text", text: "d" },
+]);
+check(exactly.ok && exactly.count === 40, "exactly 40 components is allowed");
+
+const rich = compileComponents([
+  { type: "container", accent_color: "#ff0000", components: [
+    { type: "text", text: "# Rules" },
+    { type: "separator", divider: true, spacing: "large" },
+    { type: "section", text: "Read them", buttons: [{ label: "Full text", url: "https://example.com" }] },
+    { type: "gallery", media: [{ url: "https://example.com/banner.png", spoiler: true }] },
+  ] },
+]);
+check(rich.ok && rich.count === 7, "a realistic panel counts correctly");
+check(rich.ok && rich.hasMedia, "media anywhere in the tree is reported at the top");
+check(rich.ok && rich.components[0].components[3].items[0].spoiler === true, "a spoiler on a gallery item survives nesting");
+
+// Reading a Components V2 message back. Its content field is empty, so the
+// digest has to recover the words from the tree or the message looks blank.
+const { textFromComponents } = await import("../dist/discord/components.js");
+
+check(textFromComponents(undefined) === "", "no components reads back as empty");
+check(textFromComponents([]) === "", "an empty tree reads back as empty");
+
+const flat = compileComponents([
+  { type: "text", text: "first" },
+  { type: "text", text: "second" },
+]);
+check(textFromComponents(flat.components) === "first\nsecond", "top-level text is recovered in order");
+
+check(
+  textFromComponents(rich.components).includes("# Rules"),
+  "text nested inside a container is recovered"
+);
+check(
+  textFromComponents(rich.components).includes("Read them"),
+  "a section body is recovered"
+);
+check(
+  textFromComponents(rich.components).includes("[Full text](https://example.com)"),
+  "a section link button is recovered as a markdown link"
+);
+
+const rowText = textFromComponents(row.components);
+check(rowText === "[Docs](https://example.com)\n[Rules](https://example.com/r)", "every button in a row is recovered");
+
+// Round trip: the words that went in come back out, in order.
+const sourceText = ["alpha", "beta", "gamma"];
+const roundTrip = compileComponents([
+  { type: "container", components: sourceText.map((t) => ({ type: "text", text: t })) },
+]);
+check(
+  textFromComponents(roundTrip.components) === sourceText.join("\n"),
+  "compile then read back recovers the original text"
+);
+
+check(textFromComponents({ type: 10, content: "bare" }) === "bare", "a single component object works, not just an array");
+check(textFromComponents(null) === "", "null is handled");
+check(textFromComponents("string") === "", "a non-object is handled");
 }
 
 if (failures > 0) {

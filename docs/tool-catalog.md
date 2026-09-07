@@ -173,7 +173,7 @@ The 15 always-loaded tools. Chosen so that the two headline flows (chat and oper
 |---|---|---|---|---|
 | list_channels * | no | none | guild, type | All channels grouped by category, with type, topic, and position. Filterable by type. |
 | get_channel | no | none | channel | Full detail for one channel: settings, permission overwrite summary, forum tags if applicable, active thread count. |
-| create_channel * | no | Manage Channels | guild, name, type (text, voice, forum, stage, announcement, category), category, topic, slowmode_seconds, nsfw | Creates any channel type. Overwrites are not set here: use `set_channel_permissions` afterwards, or the visibility sugar in a blueprint, which compiles them at creation. Bitrate, user limit, region, position, and forum tags are not settable. |
+| create_channel * | no | Manage Channels, plus Manage Roles when restricted | guild, name, type (text, voice, forum, stage, announcement, category), category, topic, slowmode_seconds, nsfw, private_to[], read_only, posting_roles[] | Creates any channel type. `private_to`, `read_only` and `posting_roles` are the same visibility sugar a blueprint uses, compiled to overwrites and applied in the create call, so a private channel is one request rather than three. `posting_roles` only means something alongside `read_only`. Listing @everyone in `private_to` is refused, since allowing it back cancels the restriction and leaves the channel public. Anything finer, including member-specific overwrites, is `set_channel_permissions`. Bitrate, user limit, region, position, and forum tags are not settable. |
 | update_channel | no | Manage Channels | channel, guild, name, topic, category, slowmode_seconds, nsfw | Edits channel settings. Only passed fields change. Bitrate, user limit, region, position, and forum tags are not settable. Reordering is `reorder_channels`. |
 | delete_channel | yes | Manage Channels | channel | Deletes a channel and everything in it. Dry run reports message and thread counts that would be lost. |
 | clone_channel | no | Manage Channels | channel, guild, new_name | Copies a channel's settings and permission overwrites into a new channel. Overwrites always come along; there is no opt out. |
@@ -217,10 +217,10 @@ The 15 always-loaded tools. Chosen so that the two headline flows (chat and oper
 
 | Tool | D | Requires | Key parameters | Summary |
 |---|---|---|---|---|
-| send_message * | no | Send Messages | channel, guild, content, reply_to, embeds[], mentions (none, users, roles_and_users, everything), silent | Sends a message. `mentions` defaults to none so the model cannot mass-ping by accident. |
+| send_message * | no | Send Messages; Embed Links for embeds or component media | channel, guild, content, reply_to, embeds[], components[], mentions (none, users, roles_and_users, everything), silent | Sends a message. `mentions` defaults to none so the model cannot mass-ping by accident. `components` builds a Components V2 layout from text, sections, image galleries, separators and link buttons inside colored containers. It replaces `content` and `embeds` rather than joining them: sending it sets a flag Discord will not let you clear, after which that message can never render either, so passing both is refused. Display blocks and link buttons only, covered in 7.1. |
 | read_messages * | no | Message Content intent | channel, guild, limit, before | Returns a digest: messages with author, role context, timestamps, reply chains resolved, attachments summarized. Not a raw dump. Paging is backwards only, via `before`. |
-| get_message | no | Message Content intent | channel, message_id | One message in full detail, including reactions and components. |
-| edit_message | no | own messages: none | channel, guild, message_id, content, embeds[] | Edits a bot-authored message. |
+| get_message | no | Message Content intent | channel, guild, message_id | One message in full detail: author, content, timestamps, attachments, embed count, reactions, and the reply reference. |
+| edit_message | no | own messages: none | channel, guild, message_id, content, embeds[], components[] | Edits a bot-authored message. A message keeps the mode it was sent in: edit a Components V2 message with `components`, an ordinary one with `content` or `embeds`. Discord allows no conversion either way, so both mismatches are reported before the call rather than as a bare 400. |
 | delete_message | yes | Manage Messages (others') | channel, message_id, reason | Deletes one message. |
 | bulk_delete_messages | yes | Manage Messages | channel, guild, count, from_author, contains | Bulk delete up to 100 messages under 14 days old, newest first, optionally narrowed by author or substring. Explicit message IDs are not accepted. Dry run returns the exact list. |
 | search_messages * | no | Read Message History; Message Content intent | query, channel, author, has (image, video, sound, file, sticker, embed, link, poll, snapshot), pinned, sort (recent, relevant), limit, offset | Full-text search over Discord's server message index. Matches whole words across every channel the bot can read, or one named channel, and looks inside embeds and polls, not just message text. Reports the total match count. |
@@ -233,6 +233,41 @@ The 15 always-loaded tools. Chosen so that the two headline flows (chat and oper
 | schedule_message | no | Send Messages | channel, content, send_at, repeat (none, daily, weekly, cron) | Omnicord-side scheduler. Survives restarts. |
 | list_scheduled_messages | no | none | guild | Pending scheduled messages. |
 | cancel_scheduled_message | yes | none | schedule_id | Cancels a scheduled message. |
+
+### 7.1 Message components
+
+`send_message` and `edit_message` take a `components` array that compiles to
+Discord's Components V2 layout. Each entry is a block with a `type` and the
+fields that type reads; anything else is reported rather than ignored.
+
+| type | Reads | Renders as |
+|---|---|---|
+| `text` | `text` | A paragraph of markdown. |
+| `section` | `text`, and exactly one of `media` or `buttons` | Text with a thumbnail or link button beside it. |
+| `gallery` | `media` (1-10) | A grid of images. |
+| `separator` | `divider`, `spacing` (small, large) | Vertical space, with an optional rule. |
+| `buttons` | `buttons` (1-5) | A row of link buttons. |
+| `container` | `accent_color`, `spoiler`, `components` (1-10) | A bordered group with a colored left edge. Containers do not nest. |
+
+Two limits are enforced before the call. Discord allows 40 components per
+message counted over the whole tree, where a section counts as three and a
+button row as one plus each button, so a layout can exceed the cap with far
+fewer than 40 blocks. A container holds at most 10.
+
+Buttons are link buttons: they carry a URL and open it. Buttons and select
+menus that fire an interaction are deliberately absent, because answering one
+means holding a gateway connection and replying within three seconds, and
+this server answers MCP calls rather than Discord interactions. Such a button
+would render correctly and then fail for everyone who clicked it. File
+components are absent for a different reason: they accept only
+`attachment://` references and there is no upload path here to produce one.
+Galleries and thumbnails take ordinary URLs.
+
+Reading one of these messages back works normally. Discord leaves `content`
+empty on a Components V2 message, so the digest every read tool shares pulls
+the text out of the components instead, joins it in order, renders link
+buttons as markdown links, and marks the message `components_v2`. Without
+that a panel this feature posts would read back blank.
 
 ## 8. Reactions and polls (7 tools)
 
@@ -266,7 +301,7 @@ The 15 always-loaded tools. Chosen so that the two headline flows (chat and oper
 | Tool | D | Requires | Key parameters | Summary |
 |---|---|---|---|---|
 | search_members * | no | Members intent | guild, query, role, limit | Finds members by name fragment, optionally narrowed to one role. For join-date and bot filters see `bulk_update_roles`, whose `filter` object carries them. |
-| list_members | no | Members intent | guild, limit, cursor | Paged member roster. |
+| list_members | no | Members intent | guild, limit, after | Paged member roster. Pages forward by user ID via `after`, not a cursor. |
 | get_member * | no | none | user, guild | Profile: roles, join date, timeout state, voice state, key permissions. |
 | update_member | no | varies by field | member, guild, nickname (Manage Nicknames), move_to_voice (Move Members), server_mute, server_deafen (Mute/Deafen Members), reason | Multi-field member edit, including moving them between voice channels. Role changes go through `assign_role` and `remove_role`. |
 | get_member_permissions | no | none | member, channel | Effective permissions for a member in a channel, resolved through roles and overwrites, in plain language. |
@@ -283,7 +318,7 @@ The 15 always-loaded tools. Chosen so that the two headline flows (chat and oper
 | ban_member | yes | Ban Members | user, guild, reason, delete_message_seconds | Bans, optionally deleting recent messages. `user` takes a name or an ID, so it works on users no longer in the guild. |
 | unban_member | no | Ban Members | user_id, reason | Lifts a ban. |
 | bulk_ban | yes | Ban Members + Manage Guild | user_ids[] (up to 200), reason, delete_message_seconds | Mass ban, for raid cleanup. Dry run lists every target. |
-| list_bans | no | Ban Members | guild, limit, cursor | Current bans with reasons. |
+| list_bans | no | Ban Members | guild, limit, after | Current bans with reasons. Pages forward by user ID via `after`, not a cursor. |
 | list_automod_rules | no | Manage Guild | guild | AutoMod rules, triggers, and actions, summarized. |
 | create_automod_rule | no | Manage Guild | guild, name, trigger (keyword, keyword_preset, spam, mention_spam, member_profile), keywords[], regex_patterns[], presets[] (profanity, sexual_content, slurs), allow_list[], mention_limit, actions (block, alert, timeout), alert_channel, timeout_minutes, exempt_roles[], exempt_channels[] | Creates an AutoMod rule. For slur filtering prefer keyword_preset with the slurs preset: Discord maintains the word list. member_profile scans usernames, nicknames, and bios instead of messages and needs a Community server; its block quarantines the member. Timeout is not allowed on spam, keyword_preset, or member_profile rules. |
 | update_automod_rule | no | Manage Guild | rule, same fields as create | Edits a rule. |
@@ -391,7 +426,7 @@ Real-time gateway events surfaced through MCP. No notable competitor ships this.
 | subscribe_events | no | intents vary by type | guild, types[] (14: message_created, message_deleted, member_joined, member_left, reaction_added, reaction_removed, channel_created, channel_deleted, role_created, role_updated, role_deleted, ban_added, ban_removed, voice_state_changed), channel, include_bots | Records gateway events into a buffer you then read with `get_recent_events`. There is no push delivery; nothing is sent to the client unprompted. |
 | unsubscribe_events | no | none | subscription_id | Ends a subscription. |
 | list_event_subscriptions | no | none | (none) | Active subscriptions, across every guild. |
-| get_recent_events | no | none | subscription_id, limit, cursor | Drains buffered events, for clients that cannot receive notifications. |
+| get_recent_events | no | none | subscription_id, limit | Drains buffered events, for clients that cannot receive notifications. Draining is destructive and there is no paging. |
 
 ## 20. Diagnostics and utility (4 tools)
 
@@ -408,6 +443,7 @@ Real-time gateway events surfaced through MCP. No notable competitor ships this.
 - Acting as a user account in any form. Self-bot patterns violate Discord ToS and will never ship.
 - Guild creation from nothing (`create_server`). Deferred; requires the dedicated builder-bot model due to the under-10-guilds API restriction.
 - Monetization endpoints (SKUs, entitlements), Activities, and the Social SDK surface.
+- Answering Discord interactions: component buttons with a `custom_id`, select menus, modals, and app command invocations. Registering an app command is supported; responding when someone runs it is not, and would mean an always-on listener with a three-second budget rather than a request-response tool. Only link buttons ship, per 7.1.
 - Training any model on message content obtained through the API (Developer Policy rule 21). Runtime inference only.
 
 ## 22. Open questions

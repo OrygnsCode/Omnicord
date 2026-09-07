@@ -76,7 +76,7 @@ is wrong.
 | Area | Examples |
 |---|---|
 | Server building | Plan and execute a full server build from a brief: roles, categories, channels, permissions, in one additive operation. Save, diff, and rebuild layouts as blueprints. |
-| Messaging | Send, edit, pin, forward, react, polls, scheduled messages, DMs, webhooks. |
+| Messaging | Send, edit, pin, forward, react, polls, scheduled messages, DMs, webhooks, and rich Components V2 layouts for rules and welcome panels. |
 | Reading | Channel history, full-text message search, members, roles, permissions, audit log. |
 | Moderation | Timeouts, kicks, bans, bulk actions, and prune, all preview first, plus raid lockdown to pause invites and DMs. |
 | AutoMod | Discord's server side filters: keyword rules, Discord maintained preset lists (slurs, profanity), member profile checks, spam and mention flood limits. |

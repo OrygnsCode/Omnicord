@@ -19,6 +19,18 @@ import {
   type GuildChannelLite,
 } from "../discord/guildData.js";
 import {
+  compileComponents,
+  componentsParam,
+  COMPONENTS_V2_FLAG,
+  type ComponentBlock,
+} from "../discord/components.js";
+import {
+  compileOverwrites,
+  EveryoneRoleError,
+  UnknownRoleError,
+  type OverwriteSpec,
+} from "../builder/overwrites.js";
+import {
   computeChannelPermissions,
   computeGuildPermissions,
   highestRolePosition,
@@ -77,15 +89,20 @@ export function registerWriteTools(
     {
       title: "Send message",
       description:
-        "Send a message to a channel, optionally as a reply or with embeds. " +
-        "For a private message to one person use send_dm; to post under a " +
-        "custom name and avatar use send_webhook_message; to send later use " +
-        "schedule_message. Mentions are suppressed by default; raise the " +
-        "mentions mode only deliberately. Supports dry_run.",
+        "Send a message to a channel, optionally as a reply, with embeds, " +
+        "or as a Components V2 layout of text, sections, image galleries, " +
+        "separators and link buttons inside colored containers. Components " +
+        "replace content and embeds rather than joining them, and the " +
+        "choice is permanent for that message. For a private message to " +
+        "one person use send_dm; to post under a custom name and avatar " +
+        "use send_webhook_message; to send later use schedule_message. " +
+        "Mentions are suppressed by default; raise the mentions mode only " +
+        "deliberately. Supports dry_run.",
       inputSchema: {
         channel: z.string().describe("Channel name or ID."),
         guild: guildParam,
-        content: z.string().min(1).max(2000).describe("Message text."),
+        content: z.string().min(1).max(2000).optional()
+          .describe("Message text. Required unless components is used."),
         reply_to: z.string().optional()
           .describe("Message ID to reply to."),
         mentions: z
@@ -95,6 +112,7 @@ export function registerWriteTools(
         silent: z.boolean().optional()
           .describe("Send without triggering notifications."),
         embeds: embedsParam,
+        components: componentsParam,
         dry_run: z.boolean().optional()
           .describe("Preview without sending."),
       },
@@ -108,8 +126,39 @@ export function registerWriteTools(
       mentions,
       silent,
       embeds,
+      components,
       dry_run,
     }) => {
+      // Components V2 is a whole-message mode, not an extra field. Discord
+      // stops rendering content and embeds on a message once its flag is
+      // set, and the flag can never be cleared, so a call that asks for
+      // both is refused instead of silently losing the text.
+      const layout = components as ComponentBlock[] | undefined;
+      if (layout && content !== undefined) {
+        return fail(
+          "content and components cannot be combined. Setting the " +
+            "Components V2 flag stops Discord from rendering content on " +
+            "that message, permanently. Put the text in a text block " +
+            "instead."
+        );
+      }
+      if (layout && embeds && embeds.length > 0) {
+        return fail(
+          "embeds and components cannot be combined. Embeds stop rendering " +
+            "on a Components V2 message. A container with an accent_color " +
+            "is the closest equivalent."
+        );
+      }
+      if (!layout && content === undefined) {
+        return fail("Pass content, or components for a rich layout.");
+      }
+
+      let compiled: ReturnType<typeof compileComponents> | undefined;
+      if (layout) {
+        compiled = compileComponents(layout);
+        if (!compiled.ok) return fail(compiled.reason);
+      }
+
       const { rest, guildId } = await enter(config, guild);
       const target = await resolveChannel(
         rest,
@@ -123,7 +172,9 @@ export function registerWriteTools(
         [P.ViewChannel, "View Channel"],
         [P.SendMessages, "Send Messages"],
       ];
-      if (embeds && embeds.length > 0) {
+      // Galleries and thumbnails render as embedded media, so they need the
+      // same permission an embed does.
+      if ((embeds && embeds.length > 0) || (compiled?.ok && compiled.hasMedia)) {
         needed.push([P.EmbedLinks, "Embed Links"]);
       }
       if (mentions === "everything") {
@@ -133,8 +184,11 @@ export function registerWriteTools(
 
       if (dry_run) {
         return ok(
-          `Dry run: would send ${content.length} characters to ` +
-            `#${target.name}` +
+          "Dry run: would send " +
+            (compiled?.ok
+              ? `a ${compiled.count}-component layout`
+              : `${content?.length ?? 0} characters`) +
+            ` to #${target.name}` +
             (reply_to ? ` as a reply to ${reply_to}` : "") +
             (embeds?.length ? ` with ${embeds.length} embed(s)` : "") +
             ". Nothing was sent.",
@@ -143,15 +197,22 @@ export function registerWriteTools(
       }
 
       const mode = mentions ?? "none";
+      // Both flags live in the same field, so silent has to be OR'd in
+      // rather than assigned.
+      let flags = 0;
+      if (silent) flags |= 4096;
+      if (compiled?.ok) flags |= COMPONENTS_V2_FLAG;
+
       const body: RESTPostAPIChannelMessageJSONBody = {
-        content,
+        ...(content !== undefined ? { content } : {}),
         allowed_mentions: {
           parse: MENTION_MODES[mode] as never,
           replied_user: mode !== "none",
         },
         ...(reply_to ? { message_reference: { message_id: reply_to } } : {}),
-        ...(silent ? { flags: 4096 } : {}),
+        ...(flags !== 0 ? { flags } : {}),
         ...(embeds && embeds.length > 0 ? { embeds: mapEmbeds(embeds) } : {}),
+        ...(compiled?.ok ? { components: compiled.components as never } : {}),
       };
 
       const sent = (await rest.post(Routes.channelMessages(target.id), {
@@ -166,7 +227,14 @@ export function registerWriteTools(
           id: sent.id,
           channel: { id: target.id, name: target.name },
           jump_link: jumpLink(guildId, target.id, sent.id),
-        }
+          ...(compiled?.ok ? { components_v2: true } : {}),
+        },
+        compiled?.ok
+          ? [
+              "This message is now a Components V2 message. It can be " +
+                "edited with components, but never with content or embeds.",
+            ]
+          : undefined
       );
     })
   );
@@ -252,8 +320,12 @@ export function registerWriteTools(
       title: "Create channel",
       description:
         "Create a text, voice, forum, stage, announcement, or category " +
-        "channel, optionally inside a category. Permission overwrites come " +
-        "with the permissions tools in a later phase. Supports dry_run.",
+        "channel, optionally inside a category, and optionally private or " +
+        "read-only from the start. private_to, read_only and posting_roles " +
+        "compile to permission overwrites and are applied in the same call, " +
+        "so a private channel is one request rather than a create followed " +
+        "by set_channel_permissions. Use set_channel_permissions for " +
+        "anything finer. Supports dry_run.",
       inputSchema: {
         guild: guildParam,
         name: z.string().min(1).max(100).describe("Channel name."),
@@ -268,6 +340,21 @@ export function registerWriteTools(
         slowmode_seconds: z.number().int().min(0).max(21600).optional()
           .describe("Per-user message cooldown."),
         nsfw: z.boolean().optional(),
+        private_to: z.array(z.string()).max(20).optional()
+          .describe(
+            "Role names that can see the channel. Everyone else is denied " +
+              "View Channel, and Connect too on voice, stage and category. " +
+              "Do not list @everyone."
+          ),
+        read_only: z.boolean().optional()
+          .describe(
+            "Deny sending to everyone, for rules and announcement channels."
+          ),
+        posting_roles: z.array(z.string()).max(20).optional()
+          .describe(
+            "Role names that may still post when read_only is set. Has no " +
+              "effect on its own."
+          ),
         dry_run: z.boolean().optional()
           .describe("Preview without creating."),
       },
@@ -281,6 +368,9 @@ export function registerWriteTools(
       topic,
       slowmode_seconds,
       nsfw,
+      private_to,
+      read_only,
+      posting_roles,
       dry_run,
     }) => {
       const { rest, guildId } = await enter(config, guild);
@@ -300,24 +390,114 @@ export function registerWriteTools(
         return fail("A category cannot be placed inside another category.");
       }
 
+      // posting_roles is an exception carved out of read_only. On its own
+      // there is nothing to except: everyone can already post.
+      if ((posting_roles?.length ?? 0) > 0 && read_only !== true) {
+        return fail(
+          "posting_roles only means something alongside read_only, which " +
+            "is what denies posting in the first place. Set read_only true " +
+            "or drop posting_roles."
+        );
+      }
+
+      const restricted = (private_to?.length ?? 0) > 0 || read_only === true;
+
       const perms = await botPermissions(rest, guildId);
-      requirePermissions(
-        perms,
-        [[P.ManageChannels, "Manage Channels"]],
-        "in this server"
-      );
+      const needed: Array<[bigint, string]> = [
+        [P.ManageChannels, "Manage Channels"],
+      ];
+      // Overwrites are role permissions, and Discord gates writing them
+      // separately from creating the channel.
+      if (restricted) needed.push([P.ManageRoles, "Manage Roles"]);
+      requirePermissions(perms, needed, "in this server");
 
       let parent: GuildChannelLite | undefined;
       if (category) {
         parent = await resolveChannel(rest, guildId, category, [4]);
       }
 
+      let overwrites: OverwriteSpec[] = [];
+      if (restricted) {
+        const roles = await getRoles(rest, guildId);
+        // Discord lets two roles share a name. Picking either one would be
+        // a guess about who can see the channel, so an ambiguous reference
+        // is refused rather than resolved.
+        const byName = new Map<string, string>();
+        const ambiguous = new Set<string>();
+        for (const r of roles) {
+          if (!r.name) continue;
+          const key = r.name.toLowerCase();
+          if (byName.has(key)) ambiguous.add(key);
+          else byName.set(key, r.id);
+        }
+        const clashes = [
+          ...new Set(
+            [...(private_to ?? []), ...(posting_roles ?? [])].filter((n) =>
+              ambiguous.has(n.toLowerCase())
+            )
+          ),
+        ];
+        if (clashes.length > 0) {
+          return fail(
+            `This server has more than one role named ` +
+              `${clashes.map((c) => `"${c}"`).join(" and ")}, so it is not ` +
+              "clear which should get access. Rename one, or create the " +
+              "channel plainly and use set_channel_permissions, which takes " +
+              "a role ID."
+          );
+        }
+
+        const botUser = await getBotUser(rest);
+        try {
+          overwrites = compileOverwrites(
+            {
+              kind,
+              privateTo: private_to,
+              readOnly: read_only,
+              postingRoles: posting_roles,
+            },
+            byName,
+            guildId,
+            botUser.id
+          );
+        } catch (err) {
+          if (err instanceof UnknownRoleError) {
+            return fail(err.message, {
+              available_roles: roles
+                .filter((r) => r.id !== guildId)
+                .map((r) => r.name),
+            });
+          }
+          if (err instanceof EveryoneRoleError) return fail(err.message);
+          throw err;
+        }
+      }
+
+      // Said the same way in the dry run and in the result, so a preview
+      // and the real thing never describe the outcome differently.
+      const access = restricted
+        ? (private_to?.length
+            ? `, visible only to ${private_to.join(", ")}`
+            : "") +
+          (read_only
+            ? `, read-only${
+                posting_roles?.length
+                  ? ` except for ${posting_roles.join(", ")}`
+                  : ""
+              }`
+            : "")
+        : "";
+
       if (dry_run) {
         return ok(
           `Dry run: would create ${kind} channel "${name}"` +
             (parent ? ` under category ${parent.name}` : "") +
+            access +
             ". Nothing was created.",
-          { executed: false }
+          {
+            executed: false,
+            ...(restricted ? { permission_overwrites: overwrites } : {}),
+          }
         );
       }
 
@@ -330,6 +510,9 @@ export function registerWriteTools(
           ? { rate_limit_per_user: slowmode_seconds }
           : {}),
         ...(nsfw !== undefined ? { nsfw } : {}),
+        ...(overwrites.length > 0
+          ? { permission_overwrites: overwrites as never }
+          : {}),
       };
 
       const created = (await rest.post(Routes.guildChannels(guildId), {
@@ -341,6 +524,7 @@ export function registerWriteTools(
       return ok(
         `Created ${kind} channel ${created.name} (${created.id})` +
           (parent ? ` under ${parent.name}` : "") +
+          access +
           (kind === "text" && created.name !== name
             ? `. Discord normalized the name from "${name}".`
             : "."),
@@ -349,6 +533,7 @@ export function registerWriteTools(
           name: created.name,
           type: kind,
           category: parent ? { id: parent.id, name: parent.name } : null,
+          ...(restricted ? { permission_overwrites: overwrites } : {}),
         }
       );
     })
