@@ -1,0 +1,80 @@
+# Publishes a tagged release to npm through GitHub's OIDC trusted publisher,
+# so no npm token exists anywhere: not in repository secrets, not on a
+# laptop. npm exchanges the job's identity token for a short-lived publish
+# credential and attaches a provenance attestation. The package's settings
+# on npmjs.com name this repository, this workflow file, and the `npm`
+# environment as the only identity allowed to do that, and all three must
+# match or the registry answers with an auth failure rather than a config
+# error.
+#
+# Runs on a v* tag push. It can also be dispatched by hand with a tag name,
+# which exists for one reason: a tag pushed before this workflow existed
+# cannot trigger it.
+#
+# Two steps below look redundant and are not. npm is moved to 11.x because
+# the token exchange needs 11.5.1 or newer; an older npm silently falls back
+# to the placeholder token setup-node writes and the registry answers 404
+# with nothing useful in it. And NODE_AUTH_TOKEN is never set: its presence
+# disables the OIDC path.
+
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing tag to publish, like v1.4.0"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.event.inputs.tag || github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  publish-npm:
+    name: Publish to npm
+    runs-on: ubuntu-latest
+    environment:
+      name: npm
+      url: https://www.npmjs.com/package/@orygn/omnicord
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.inputs.tag || github.ref }}
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+          registry-url: "https://registry.npmjs.org"
+
+      - name: Use an npm that can do the OIDC exchange
+        run: npm install -g npm@^11
+
+      - name: Refuse a tag that does not match package.json
+        run: |
+          TAG="${{ github.event.inputs.tag || github.ref_name }}"
+          PKG="v$(node -p "require('./package.json').version")"
+          if [ "$TAG" != "$PKG" ]; then
+            echo "Tag $TAG does not match package.json version $PKG."
+            exit 1
+          fi
+
+      - name: Install dependencies
+        run: npm ci
+
+      # prepublishOnly runs the full local suite (build, unit, stdio and
+      # HTTP smoke) before the tarball leaves the runner, so a publish is
+      # gated by the same tests as a commit, on the exact tagged source.
+      - name: Publish
+        run: npm publish --access public
