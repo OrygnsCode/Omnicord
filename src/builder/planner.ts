@@ -10,6 +10,7 @@ import {
   normalizedChannelName,
   type Blueprint,
   type BlueprintChannel,
+  DISCORD_LIMITS,
 } from "./blueprint.js";
 
 // The planner. Takes a blueprint plus a snapshot of the live server and
@@ -18,11 +19,12 @@ import {
 // testable. Every edge case caught here is a Discord 400 that never
 // happens and a half-built server that never exists.
 
-// Discord structural limits, from the developer docs. The planner checks
-// them against existing counts plus what the blueprint adds.
-const MAX_CHANNELS_PER_GUILD = 500;
-const MAX_ROLES_PER_GUILD = 250;
-const MAX_CHANNELS_PER_CATEGORY = 50;
+// Discord structural limits, shared with the schema caps in blueprint.ts.
+// The planner checks them against existing counts plus what the blueprint
+// adds, which is the check that catches a real overflow.
+const MAX_CHANNELS_PER_GUILD = DISCORD_LIMITS.channelsPerGuild;
+const MAX_ROLES_PER_GUILD = DISCORD_LIMITS.rolesPerGuild;
+const MAX_CHANNELS_PER_CATEGORY = DISCORD_LIMITS.channelsPerCategory;
 
 // Channel types that only work when the guild has the COMMUNITY feature.
 // Verified empirically against the live API in June 2026: forum channels

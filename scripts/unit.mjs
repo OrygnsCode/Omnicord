@@ -1392,6 +1392,30 @@ check(reordered.blueprint.roles.map((r) => r.name).join(",") === order, "export 
 }
 }
 
+// Blueprint caps match Discord's own limits, so any server Discord allows
+// fits in a blueprint and the live-aware planner check is the one that
+// decides.
+
+{
+const { blueprintSchema, DISCORD_LIMITS } = await import("../dist/builder/blueprint.js");
+
+check(DISCORD_LIMITS.rolesPerGuild === 250, "role cap is Discord's 250");
+check(DISCORD_LIMITS.channelsPerGuild === 500, "channel cap is Discord's 500");
+check(DISCORD_LIMITS.channelsPerCategory === 50, "per-category cap is Discord's 50");
+
+const manyRoles = (n) => ({ roles: Array.from({ length: n }, (_, i) => ({ name: `r${i}` })) });
+check(blueprintSchema.safeParse(manyRoles(250)).success, "a 250-role blueprint parses");
+check(!blueprintSchema.safeParse(manyRoles(251)).success, "a 251-role blueprint is rejected");
+check(blueprintSchema.safeParse(manyRoles(51)).success, "a 51-role server is exportable");
+
+const manyChannels = (n) => ({ channels: Array.from({ length: n }, (_, i) => ({ name: `c${i}` })) });
+check(blueprintSchema.safeParse(manyChannels(500)).success, "500 top-level channels parse");
+check(!blueprintSchema.safeParse(manyChannels(501)).success, "501 top-level channels are rejected");
+
+const bigCategory = { categories: [{ name: "big", channels: Array.from({ length: 51 }, (_, i) => ({ name: `c${i}` })) }] };
+check(!blueprintSchema.safeParse(bigCategory).success, "51 channels in one category is still rejected");
+}
+
 if (failures > 0) {
   console.error(`\nunit: ${failures} failure(s)`);
   process.exit(1);

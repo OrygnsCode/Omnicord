@@ -59,6 +59,20 @@ export const blueprintCategorySchema = z.object({
   channels: z.array(blueprintChannelSchema).max(50),
 });
 
+// Discord's structural limits, from the developer docs. The schema caps
+// below match them so a blueprint can hold any server Discord itself
+// allows; tighter caps here would make a large server unexportable while
+// adding nothing, since the planner checks these same numbers against the
+// live server (existing entities plus what the blueprint adds), which is
+// the check that actually matters. Kept in one place so the two cannot
+// disagree.
+export const DISCORD_LIMITS = {
+  rolesPerGuild: 250,
+  channelsPerGuild: 500,
+  channelsPerCategory: 50,
+  categoriesPerGuild: 50,
+} as const;
+
 export const blueprintSchema = z.object({
   name: z.string().max(100).optional()
     .describe("Optional label for saving or referencing this blueprint."),
@@ -66,16 +80,19 @@ export const blueprintSchema = z.object({
     .describe("Freeform note recording the intent and naming style."),
   roles: z
     .array(blueprintRoleSchema)
-    .max(50)
+    .max(DISCORD_LIMITS.rolesPerGuild)
     .optional()
     .describe(
       "Highest role first, the way the server settings list them. A build " +
         "creates them in this order and that order is the hierarchy."
     ),
-  categories: z.array(blueprintCategorySchema).max(50).optional(),
+  categories: z
+    .array(blueprintCategorySchema)
+    .max(DISCORD_LIMITS.categoriesPerGuild)
+    .optional(),
   channels: z
     .array(blueprintChannelSchema)
-    .max(100)
+    .max(DISCORD_LIMITS.channelsPerGuild)
     .optional()
     .describe("Top-level channels outside any category."),
 });
