@@ -51,12 +51,13 @@ When more than one bot is configured, each guild-scoped tool is routed to the bo
 
 ### 1.3 Tiers
 
-Two tiers:
+Every tool a session exposes is registered at startup and appears in `tools/list`. Nothing is fetched later, and there is no discovery call: an earlier version of this document described on-demand loading that was never built.
 
-- `core`: always present in the tool list. 15 tools, chosen for high frequency and to keep the schema footprint small. Marked with an asterisk in the tables below.
-- `extended`: registered with the server but surfaced on demand, via client-side tool search or via `tools/list_changed` after a discovery call. A client that loads everything anyway still works; the tiering is an optimization, not a gate.
+What controls the surface is `OMNICORD_TOOLS`, which selects groups. Unset loads all 155. See [toolsets](toolsets.md) for the groups, their membership, and what each one costs in context. The `core` group there is 14 diagnostics and read tools, always loaded because without them the server cannot report which servers it reaches or whether setup worked.
 
-Tier is orthogonal to authorization. A tool being loaded does not mean the caller may use it (see 1.8).
+The asterisk in the tables below is editorial: it marks the tools judged highest-frequency when this contract was written. It is not the same set as the `core` toolset and has no runtime effect. The two should be reconciled.
+
+Neither marking is authorization. A tool being loaded does not mean the caller may use it (see 1.8).
 
 ### 1.4 Destructive operations
 
@@ -358,7 +359,11 @@ The 15 always-loaded tools. Chosen so that the two headline flows (chat and oper
 
 The product headline. The flow is: brief in, plan out, plan reviewed, plan executed, with blueprints as the persistence format.
 
-A blueprint is a JSON document describing a complete server: roles (with permission bundles and hierarchy), categories, channels (with types, topics, settings, and overwrites expressed against role names rather than IDs), AutoMod rules, onboarding, welcome screen, scheduled events, and seed content (rules post, pinned welcome, webhooks). Blueprints are portable across guilds because they reference roles by name.
+A blueprint is a JSON document with five optional fields: `name`, `theme`, `roles`, `categories`, and `channels` (top-level ones, outside any category). Roles carry a name, a permission preset plus any extra permission names, and color, hoist, and mentionable. Channels carry a name, type (text, voice, forum, stage, announcement), topic, slowmode, nsfw, and the visibility sugar below. Blueprints are portable across guilds because they reference roles by name rather than by ID.
+
+Limits, enforced by the schema on both authoring and export: 50 roles, 50 categories, 100 top-level channels, and 50 channels per category. A server past any of those cannot be exported.
+
+What a blueprint does not carry: role hierarchy (there is no position field, and the executor never reorders), AutoMod rules, onboarding, the welcome screen, scheduled events, and seed content such as a rules post or pinned message. Those are managed by their own tools, not by the builder.
 
 Division of labor, fixed at implementation time: the AI client owns the creative translation from conversation to blueprint (themes, naming, which channels a "dark fantasy guild" needs), guided by the reference layouts. Omnicord owns correctness: schema validation, intra-blueprint and live-server collision detection, Discord structural limits, role reference resolution, Community feature gating (verified against the live API: forums work everywhere, announcement and stage channels need Community), bot permission preflight, and dependency ordering. This keeps every deployment free of any LLM dependency inside the server itself. Visibility sugar on channels and categories: private_to (role names that can see it), read_only, and posting_roles compile to permission overwrites at execution.
 
@@ -366,14 +371,14 @@ Division of labor, fixed at implementation time: the AI client owns the creative
 |---|---|---|---|---|
 | plan_server_build * | no | none | guild, blueprint (structured; the client AI composes it from the user's request, optionally starting from a reference layout) | Validates the blueprint against the live server and stages an ordered build plan. Makes no changes. Reports every problem at once (collisions, limits, bad role references, feature gates, missing bot permissions); existing entities with matching names are reused, never duplicated. |
 | execute_build_plan * | no (additive) | aggregate of the plan's needs, typically Manage Channels + Manage Roles | guild, plan_id or blueprint | Executes a plan. The blueprint is re-validated against live server state at execution time, so staged plans can never act on stale data. Strictly additive in v1: existing entities are reused, nothing is deleted or modified; visibility sugar compiles to permission overwrites at creation, and the bot always grants itself access to what it builds. Runs in dependency order (roles, categories, channels), halts on failure with a created/failed/not-attempted report, and re-running after a fix resumes naturally through reuse. Reconcile mode (destructive, drift-correcting) is deferred to the diff_blueprint work. |
-| list_reference_layouts | no | none | (none) | Curated server archetypes shipped with Omnicord: gaming community, product support, creator community, study group, esports org, internal team. Each is a vetted blueprint with rationale notes. |
+| list_reference_layouts | no | none | (none) | The three server archetypes shipped with Omnicord: `gaming-community`, `product-support`, and `friends-hangout`. Each is a vetted blueprint with a stated audience and rationale. |
 | get_reference_layout | no | none | layout_id | One archetype in full, with commentary on why its structure works. |
-| export_server_blueprint | no | none | guild, save_as | Snapshots a live guild into a blueprint, decompiling permission overwrites back into the visibility sugar where they fit and warning where they do not. Seed content capture is not part of the export yet. |
+| export_server_blueprint | no | none | guild, save_as | Snapshots a live guild into a blueprint, decompiling permission overwrites back into the visibility sugar where they fit and warning per channel where they do not. Roles sharing a name are exported with a numeric suffix, since the format keys everything by name; overwrites for integration-managed roles are reported rather than exported, because those roles are not recreatable. Role hierarchy, seed content, and anything outside the schema above are not captured. |
 | save_blueprint | no | none | name, blueprint, description | Saves a blueprint to the Omnicord store. |
 | list_blueprints | no | none | (none) | Saved blueprints with names and dates. |
-| get_blueprint | no | none | blueprint_id | One saved blueprint. |
-| delete_blueprint | yes | none | blueprint_id | Deletes a saved blueprint. |
-| diff_blueprint | no | none | guild, blueprint_id | Drift report: how the live server differs from a blueprint (missing channels, changed permissions, renamed roles). The basis for reconcile mode and for config-as-code workflows. |
+| get_blueprint | no | none | blueprint (saved name or ID) | One saved blueprint. |
+| delete_blueprint | yes | none | blueprint (saved name or ID), dry_run, confirm_token | Deletes a saved blueprint. Gated: previews first, executes on the token. |
+| diff_blueprint | no | none | guild, blueprint (saved name or ID) | Drift report: how the live server differs from a blueprint (missing channels, changed permissions, renamed roles). Reporting only. Nothing applies a diff: re-running execute_build_plan creates what is missing and leaves everything else as it is, so a changed topic or overwrite is reported and then not corrected. Reconcile is deferred. |
 
 ## 19. Events and notifications (4 tools)
 
