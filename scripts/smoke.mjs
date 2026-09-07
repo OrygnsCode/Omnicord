@@ -6,6 +6,7 @@
 // Run with: npm run smoke
 
 import { spawn } from "node:child_process";
+import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { tmpdir } from "node:os";
@@ -210,6 +211,30 @@ try {
     assert(orphans.length === 0, `every registered tool belongs to a toolset${orphans.length ? ` (orphans: ${orphans.join(", ")})` : ""}`);
     assert(phantoms.length === 0, `no toolset names a tool that is not registered${phantoms.length ? ` (missing: ${phantoms.join(", ")})` : ""}`);
     assert(mapped.size === names.length, `the toolset map covers all ${names.length} tools (map has ${mapped.size})`);
+
+    // The catalog describes core in prose in two places and toolsets.md
+    // tabulates it. Each states a count, and each has to be the real one, or
+    // a reader is told a different always-loaded set than the one they get.
+    const coreCount = CORE_TOOLS.length;
+    const words = { 14: "Fourteen", 15: "Fifteen", 16: "Sixteen", 13: "Thirteen" };
+    const catalog = readFileSync(join(root, "docs", "tool-catalog.md"), "utf8");
+    const toolsetsDoc = readFileSync(join(root, "docs", "toolsets.md"), "utf8");
+    assert(
+      catalog.includes(`The \`core\` group there is ${coreCount} `),
+      `catalog section 1.3 states the real core count (${coreCount})`
+    );
+    assert(
+      catalog.includes(`${words[coreCount] ?? coreCount} tools load no matter what`),
+      `catalog section 2 states the real core count (${coreCount})`
+    );
+    assert(
+      new RegExp(`^\\| \`core\` \\| ${coreCount} \\|`, "m").test(toolsetsDoc),
+      `toolsets.md tabulates the real core count (${coreCount})`
+    );
+    // Section 2 also promises every core tool is a read. Hold it to that.
+    const toolByName = new Map((tools.result?.tools ?? []).map((t) => [t.name, t]));
+    const writesInCore = CORE_TOOLS.filter((n) => toolByName.get(n)?.annotations?.readOnlyHint !== true);
+    assert(writesInCore.length === 0, `every core tool is read-only${writesInCore.length ? ` (not: ${writesInCore.join(", ")})` : ""}`);
   }
 
   async function callTool(name, args) {

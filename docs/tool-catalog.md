@@ -123,34 +123,37 @@ The server owns rate limit coordination so the model never sees a 429 it could h
 - Voice audio: joining voice to play or capture audio is out of scope for v1 (it requires a separate UDP voice connection, Opus, and DAVE E2EE as of March 1, 2026). Voice tools in v1 are administrative only. Audio is the planned v2 flagship.
 - Guild creation: `POST /guilds` only works for bots in fewer than 10 guilds. The v1 product targets building out servers the user creates and invites the bot into, which has no such cap. A from-scratch `create_server` tool is deferred and will require a dedicated builder bot.
 
-## 2. Core set
+## 2. What is always loaded
 
-The 15 always-loaded tools. Chosen so that the two headline flows (chat and operate a server; build out a server from a brief) work without a single discovery round trip.
+Fourteen tools load no matter what: the `core` toolset. They are all reads,
+so narrowing the surface with `OMNICORD_TOOLS` can never leave a write
+enabled that was not asked for, and an agent can always orient itself before
+it acts. The list, the sizes, and every optional group are in
+[toolsets.md](toolsets.md), which is the only place they are written down.
+A second copy here would be a second thing to keep true.
 
-| Tool | Why core |
-|---|---|
-| get_server_overview | Orientation. First call in almost every session. |
-| list_channels | Needed before nearly any channel-scoped action. |
-| find | Universal name-to-entity resolver, kills snowflake hunting. |
-| read_messages | The single most frequent read. |
-| send_message | The single most frequent write. |
-| search_messages | "What did X say about Y" is a top request. |
-| search_members | Member lookup precedes most member actions. |
-| get_member | Profile, roles, and permissions for one person. |
-| create_channel | Highest-frequency build primitive. |
-| list_roles | Needed before any role action. |
-| create_role | Second build primitive. |
-| assign_role | Most frequent member write. |
-| plan_server_build | The product headline, step 1: brief to plan. |
-| execute_build_plan | The product headline, step 2: plan to server. |
-| run_setup_check | Catches the silent failures (intents, perms) that sink every competitor's first-run experience. |
+The surface is shaped around two flows, and those drove which tools exist and
+how they are named rather than which ones load:
+
+- Chat and operate a server. Orientation (`get_server_overview`,
+  `list_channels`), name-to-entity resolution (`find`, so a model never hunts
+  for a snowflake), then the frequent reads and writes: `read_messages`,
+  `send_message`, `search_messages`, `search_members`, `get_member`,
+  `assign_role`.
+- Build a server from a brief. `plan_server_build` to turn a brief into a
+  plan, `execute_build_plan` to apply it, with `create_channel` and
+  `create_role` as the primitives underneath.
+
+`run_setup_check` sits outside both. Missing intents and permissions fail
+silently and are the usual reason a first run goes nowhere, so diagnosing
+that is a tool rather than a paragraph in a README.
 
 ## 3. Server and guild settings (17 tools)
 
 | Tool | D | Requires | Key parameters | Summary |
 |---|---|---|---|---|
 | list_servers | no | none | (none) | Every server across all configured bots, each labeled with the bot that reaches it, with IDs and approximate member counts. With multiple bots this is the routing map; any unreachable bot (bad token) is flagged. Use get_server_overview for one server's detail. |
-| get_server_overview * | no | none | guild | Structured snapshot: name, owner, boost level, features, counts of channels, roles, members, emojis, plus a category-grouped channel outline. |
+| get_server_overview | no | none | guild | Structured snapshot: name, owner, boost level, features, counts of channels, roles, members, emojis, plus a category-grouped channel outline. |
 | update_server | no | Manage Guild | guild, name, description, verification_level, afk_channel, afk_timeout_seconds (60, 300, 900, 1800, 3600), system_channel, rules_channel, public_updates_channel, community | Edits guild settings. Only passed fields change. Icon, banner, default notifications, and locale are not editable here. |
 | get_server_preview | no | none | guild | Public preview data for a discoverable guild. |
 | get_audit_log | no | View Audit Log | guild, action, user, limit | Recent audit entries, summarized per entry (who did what to what, when). Not paginated. |
@@ -171,9 +174,9 @@ The 15 always-loaded tools. Chosen so that the two headline flows (chat and oper
 
 | Tool | D | Requires | Key parameters | Summary |
 |---|---|---|---|---|
-| list_channels * | no | none | guild, type | All channels grouped by category, with type, topic, and position. Filterable by type. |
+| list_channels | no | none | guild, type | All channels grouped by category, with type, topic, and position. Filterable by type. |
 | get_channel | no | none | channel | Full detail for one channel: settings, permission overwrite summary, forum tags if applicable, active thread count. |
-| create_channel * | no | Manage Channels, plus Manage Roles when restricted | guild, name, type (text, voice, forum, stage, announcement, category), category, topic, slowmode_seconds, nsfw, private_to[], read_only, posting_roles[] | Creates any channel type. `private_to`, `read_only` and `posting_roles` are the same visibility sugar a blueprint uses, compiled to overwrites and applied in the create call, so a private channel is one request rather than three. `posting_roles` only means something alongside `read_only`. Listing @everyone in `private_to` is refused, since allowing it back cancels the restriction and leaves the channel public. Anything finer, including member-specific overwrites, is `set_channel_permissions`. Bitrate, user limit, region, position, and forum tags are not settable. |
+| create_channel | no | Manage Channels, plus Manage Roles when restricted | guild, name, type (text, voice, forum, stage, announcement, category), category, topic, slowmode_seconds, nsfw, private_to[], read_only, posting_roles[] | Creates any channel type. `private_to`, `read_only` and `posting_roles` are the same visibility sugar a blueprint uses, compiled to overwrites and applied in the create call, so a private channel is one request rather than three. `posting_roles` only means something alongside `read_only`. Listing @everyone in `private_to` is refused, since allowing it back cancels the restriction and leaves the channel public. Anything finer, including member-specific overwrites, is `set_channel_permissions`. Bitrate, user limit, region, position, and forum tags are not settable. |
 | update_channel | no | Manage Channels | channel, guild, name, topic, category, slowmode_seconds, nsfw | Edits channel settings. Only passed fields change. Bitrate, user limit, region, position, and forum tags are not settable. Reordering is `reorder_channels`. |
 | delete_channel | yes | Manage Channels | channel | Deletes a channel and everything in it. Dry run reports message and thread counts that would be lost. |
 | clone_channel | no | Manage Channels | channel, guild, new_name | Copies a channel's settings and permission overwrites into a new channel. Overwrites always come along; there is no opt out. |
@@ -217,13 +220,13 @@ The 15 always-loaded tools. Chosen so that the two headline flows (chat and oper
 
 | Tool | D | Requires | Key parameters | Summary |
 |---|---|---|---|---|
-| send_message * | no | Send Messages; Embed Links for embeds or component media | channel, guild, content, reply_to, embeds[], components[], mentions (none, users, roles_and_users, everything), silent | Sends a message. `mentions` defaults to none so the model cannot mass-ping by accident. `components` builds a Components V2 layout from text, sections, image galleries, separators and link buttons inside colored containers. It replaces `content` and `embeds` rather than joining them: sending it sets a flag Discord will not let you clear, after which that message can never render either, so passing both is refused. Display blocks and link buttons only, covered in 7.1. |
-| read_messages * | no | Message Content intent | channel, guild, limit, before | Returns a digest: messages with author, role context, timestamps, reply chains resolved, attachments summarized. Not a raw dump. Paging is backwards only, via `before`. |
+| send_message | no | Send Messages; Embed Links for embeds or component media | channel, guild, content, reply_to, embeds[], components[], mentions (none, users, roles_and_users, everything), silent | Sends a message. `mentions` defaults to none so the model cannot mass-ping by accident. `components` builds a Components V2 layout from text, sections, image galleries, separators and link buttons inside colored containers. It replaces `content` and `embeds` rather than joining them: sending it sets a flag Discord will not let you clear, after which that message can never render either, so passing both is refused. Display blocks and link buttons only, covered in 7.1. |
+| read_messages | no | Message Content intent | channel, guild, limit, before | Returns a digest: messages with author, role context, timestamps, reply chains resolved, attachments summarized. Not a raw dump. Paging is backwards only, via `before`. |
 | get_message | no | Message Content intent | channel, guild, message_id | One message in full detail: author, content, timestamps, attachments, embed count, reactions, and the reply reference. |
 | edit_message | no | own messages: none | channel, guild, message_id, content, embeds[], components[] | Edits a bot-authored message. A message keeps the mode it was sent in: edit a Components V2 message with `components`, an ordinary one with `content` or `embeds`. Discord allows no conversion either way, so both mismatches are reported before the call rather than as a bare 400. |
 | delete_message | yes | Manage Messages (others') | channel, message_id, reason | Deletes one message. |
 | bulk_delete_messages | yes | Manage Messages | channel, guild, count, from_author, contains | Bulk delete up to 100 messages under 14 days old, newest first, optionally narrowed by author or substring. Explicit message IDs are not accepted. Dry run returns the exact list. |
-| search_messages * | no | Read Message History; Message Content intent | query, channel, author, has (image, video, sound, file, sticker, embed, link, poll, snapshot), pinned, sort (recent, relevant), limit, offset | Full-text search over Discord's server message index. Matches whole words across every channel the bot can read, or one named channel, and looks inside embeds and polls, not just message text. Reports the total match count. |
+| search_messages | no | Read Message History; Message Content intent | query, channel, author, has (image, video, sound, file, sticker, embed, link, poll, snapshot), pinned, sort (recent, relevant), limit, offset | Full-text search over Discord's server message index. Matches whole words across every channel the bot can read, or one named channel, and looks inside embeds and polls, not just message text. Reports the total match count. |
 | pin_message | no | Pin Messages | channel, message_id | Pins. Preflights the post-Feb-2026 PIN_MESSAGES permission. |
 | unpin_message | no | Pin Messages | channel, message_id | Unpins. |
 | list_pinned_messages | no | none | channel | Pinned messages with author and date. |
@@ -285,13 +288,13 @@ that a panel this feature posts would read back blank.
 
 | Tool | D | Requires | Key parameters | Summary |
 |---|---|---|---|---|
-| list_roles * | no | none | guild | Roles with color, position, member count, and a permission digest in plain language. |
-| create_role * | no | Manage Roles | guild, name, color, permissions[] or preset (member, moderator, admin), hoist, mentionable | Creates a role. Presets map to vetted permission bundles so the model does not hand out Administrator by reflex. Role icons are not settable. |
+| list_roles | no | none | guild | Roles with color, position, member count, and a permission digest in plain language. |
+| create_role | no | Manage Roles | guild, name, color, permissions[] or preset (member, moderator, admin), hoist, mentionable | Creates a role. Presets map to vetted permission bundles so the model does not hand out Administrator by reflex. Role icons are not settable. |
 | update_role | no | Manage Roles | role, guild, name, color, permissions[] or preset, hoist, mentionable | Edits a role. Hierarchy preflighted. Role icons are not settable. |
 | delete_role | yes | Manage Roles | role | Deletes a role. Dry run reports member count losing it. |
 | clone_role | no | Manage Roles | role, new_name | Copies a role's permissions and settings. |
 | reorder_roles | no | Manage Roles | guild, moves[] (role, position) | Batch hierarchy changes. |
-| assign_role * | no | Manage Roles | member, role, reason | Gives a member a role. |
+| assign_role | no | Manage Roles | member, role, reason | Gives a member a role. |
 | remove_role | no | Manage Roles | member, role, reason | Takes a role from a member. |
 | bulk_update_roles | yes | Manage Roles | guild, action (assign, remove), role, filter (has_role, joined_before, joined_after, is_bot) | Fans a role change across all matching members. Dry run returns the member list and count. |
 | get_role_members | no | Members intent | role, limit | Members holding a role. |
@@ -300,9 +303,9 @@ that a panel this feature posts would read back blank.
 
 | Tool | D | Requires | Key parameters | Summary |
 |---|---|---|---|---|
-| search_members * | no | Members intent | guild, query, role, limit | Finds members by name fragment, optionally narrowed to one role. For join-date and bot filters see `bulk_update_roles`, whose `filter` object carries them. |
+| search_members | no | Members intent | guild, query, role, limit | Finds members by name fragment, optionally narrowed to one role. For join-date and bot filters see `bulk_update_roles`, whose `filter` object carries them. |
 | list_members | no | Members intent | guild, limit, after | Paged member roster. Pages forward by user ID via `after`, not a cursor. |
-| get_member * | no | none | user, guild | Profile: roles, join date, timeout state, voice state, key permissions. |
+| get_member | no | none | user, guild | Profile: roles, join date, timeout state, voice state, key permissions. |
 | update_member | no | varies by field | member, guild, nickname (Manage Nicknames), move_to_voice (Move Members), server_mute, server_deafen (Mute/Deafen Members), reason | Multi-field member edit, including moving them between voice channels. Role changes go through `assign_role` and `remove_role`. |
 | get_member_permissions | no | none | member, channel | Effective permissions for a member in a channel, resolved through roles and overwrites, in plain language. |
 | disconnect_member | yes | Move Members | member, reason | Kicks a member out of voice. |
@@ -406,8 +409,8 @@ Division of labor, fixed at implementation time: the AI client owns the creative
 
 | Tool | D | Requires | Key parameters | Summary |
 |---|---|---|---|---|
-| plan_server_build * | no | none | guild, blueprint (structured; the client AI composes it from the user's request, optionally starting from a reference layout) | Validates the blueprint against the live server and stages an ordered build plan. Makes no changes. Reports every problem at once (collisions, limits, bad role references, feature gates, missing bot permissions); existing entities with matching names are reused, never duplicated. |
-| execute_build_plan * | no (additive) | aggregate of the plan's needs, typically Manage Channels + Manage Roles | guild, plan_id or blueprint | Executes a plan. The blueprint is re-validated against live server state at execution time, so staged plans can never act on stale data. Strictly additive in v1: existing entities are reused, nothing is deleted or modified; visibility sugar compiles to permission overwrites at creation, and the bot always grants itself access to what it builds. Runs in dependency order (roles, categories, channels), halts on failure with a created/failed/not-attempted report, and re-running after a fix resumes naturally through reuse. Reconcile mode (destructive, drift-correcting) is deferred to the diff_blueprint work. |
+| plan_server_build | no | none | guild, blueprint (structured; the client AI composes it from the user's request, optionally starting from a reference layout) | Validates the blueprint against the live server and stages an ordered build plan. Makes no changes. Reports every problem at once (collisions, limits, bad role references, feature gates, missing bot permissions); existing entities with matching names are reused, never duplicated. |
+| execute_build_plan | no (additive) | aggregate of the plan's needs, typically Manage Channels + Manage Roles | guild, plan_id or blueprint | Executes a plan. The blueprint is re-validated against live server state at execution time, so staged plans can never act on stale data. Strictly additive in v1: existing entities are reused, nothing is deleted or modified; visibility sugar compiles to permission overwrites at creation, and the bot always grants itself access to what it builds. Runs in dependency order (roles, categories, channels), halts on failure with a created/failed/not-attempted report, and re-running after a fix resumes naturally through reuse. Reconcile mode (destructive, drift-correcting) is deferred to the diff_blueprint work. |
 | list_reference_layouts | no | none | (none) | The three server archetypes shipped with Omnicord: `gaming-community`, `product-support`, and `friends-hangout`. Each is a vetted blueprint with a stated audience and rationale. |
 | get_reference_layout | no | none | layout_id | One archetype in full, with commentary on why its structure works. |
 | export_server_blueprint | no | none | guild, save_as | Snapshots a live guild into a blueprint, decompiling permission overwrites back into the visibility sugar where they fit and warning per channel where they do not. Roles sharing a name are exported with a numeric suffix, since the format keys everything by name; overwrites for integration-managed roles are reported rather than exported, because those roles are not recreatable. Role hierarchy, seed content, and anything outside the schema above are not captured. |
@@ -432,10 +435,10 @@ Real-time gateway events surfaced through MCP. No notable competitor ships this.
 
 | Tool | D | Requires | Key parameters | Summary |
 |---|---|---|---|---|
-| run_setup_check * | no | none | bot (optional) | End-to-end health check: token presence and validity, the three privileged intents (enabled in the portal versus needed), guild count against the verification gate, gateway connection, and default-guild membership. Pass bot to check a specific bot when several are configured. Output is a plain-English pass or fix list. Run on first connect and whenever things act weird. |
+| run_setup_check | no | none | bot (optional) | End-to-end health check: token presence and validity, the three privileged intents (enabled in the portal versus needed), guild count against the verification gate, gateway connection, and default-guild membership. Pass bot to check a specific bot when several are configured. Output is a plain-English pass or fix list. Run on first connect and whenever things act weird. |
 | explain_permissions | no | none | actor (bot or member), permission, guild, channel | Answers "can X do Y in Z, and if not, why not" by resolving the full permission chain. The preflight engine, exposed. |
 | get_rate_limit_status | no | none | (none) | Current bucket states, queue depth, and invalid-request counter. |
-| find * | no | none | query, types[] (channel, role, member, emoji, thread, event), guild | The fuzzy resolver as a tool. Returns ranked candidates with IDs and context so the caller can disambiguate once and reuse the ID. |
+| find | no | none | query, types[] (channel, role, member, emoji, thread, event), guild | The fuzzy resolver as a tool. Returns ranked candidates with IDs and context so the caller can disambiguate once and reuse the ID. |
 
 ## 21. Explicit non-goals
 
