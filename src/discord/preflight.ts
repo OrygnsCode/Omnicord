@@ -17,6 +17,22 @@ export interface RoleLite {
   name?: string;
 }
 
+// Discord's hierarchy rule as the client applies it: a higher position
+// outranks, and roles sharing a position are ordered by id, the older
+// (smaller) id ranking higher. The second clause matters more than it
+// sounds. Every role created through the API arrives at position 1, so any
+// batch of new roles ties, and a sort on position alone shows them in
+// whatever order the API happened to return. Sorts low to high; swap the
+// arguments for high to low.
+export function compareRolesLowToHigh(
+  a: { position: number; id: string },
+  b: { position: number; id: string }
+): number {
+  if (a.position !== b.position) return a.position - b.position;
+  if (a.id === b.id) return 0;
+  return BigInt(a.id) > BigInt(b.id) ? -1 : 1;
+}
+
 export interface OverwriteLite {
   id: string;
   // 0 is a role overwrite, 1 is a member overwrite.

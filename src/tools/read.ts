@@ -15,6 +15,7 @@ import {
   CHANNEL_TYPE_LABELS,
 } from "../discord/guildData.js";
 import { resolveOne, type Resolvable } from "../discord/resolve.js";
+import { compareRolesLowToHigh } from "../discord/preflight.js";
 import { ok, fail } from "../envelope.js";
 import {
   enter,
@@ -206,7 +207,7 @@ export function registerReadTools(
       const { rest, guildId } = await enter(config, guild);
       const roles = await getRoles(rest, guildId);
       const listed = [...roles]
-        .sort((a, b) => b.position - a.position)
+        .sort((a, b) => compareRolesLowToHigh(b, a))
         .map((r) => ({
           id: r.id,
           name: r.name,

@@ -265,15 +265,27 @@ export function registerBuilderTools(
             `before the failure and remain in place; ${remaining} step(s) ` +
             "were not attempted. Fix the cause and run again; finished " +
             "work will be reused.",
-          { report: report.results }
+          { report: report.results, warnings: report.warnings }
         );
       }
 
       return ok(
         `Build complete: ${report.created} item(s) created, ` +
           `${report.reused} reused.`,
-        { report: report.results, created: report.created, reused: report.reused },
-        validated.warnings
+        {
+          report: report.results,
+          created: report.created,
+          reused: report.reused,
+          ...(report.rolesCreated > 0
+            ? {
+                role_positions: report.stacked
+                  ? "explicit"
+                  : "by creation order (roles share position 1; the client " +
+                    "ranks them as the blueprint listed them)",
+              }
+            : {}),
+        },
+        [...validated.warnings, ...report.warnings]
       );
     })
   );

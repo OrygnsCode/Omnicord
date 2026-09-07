@@ -1,6 +1,10 @@
 import { PermissionFlagsBits } from "discord-api-types/v10";
 import type { GuildChannelLite } from "../discord/guildData.js";
-import { describePermissions, type RoleLite } from "../discord/preflight.js";
+import {
+  compareRolesLowToHigh,
+  describePermissions,
+  type RoleLite,
+} from "../discord/preflight.js";
 import type { Blueprint, BlueprintChannel } from "./blueprint.js";
 
 // Snapshot a live server into a blueprint: the inverse of the build
@@ -109,11 +113,16 @@ export function exportBlueprint(
   const warnings: string[] = [];
 
   // Roles the blueprint will actually define: everything except @everyone
-  // and integration-managed ones, bottom of the hierarchy first so a
-  // rebuild stacks them the same way.
+  // and integration-managed ones, highest first. That is the order the
+  // server settings show and the order a build creates them, which is what
+  // carries the hierarchy: Discord parks every new role at position 1 and
+  // the client ranks tied roles by id, oldest highest, so the top role has
+  // to be created first. The comparator applies that same tie rule here, so
+  // a server whose roles all share a position still exports in the order
+  // people actually see.
   const exportable = roles
     .filter((r) => r.id !== guildId && !r.managed)
-    .sort((a, b) => a.position - b.position);
+    .sort((a, b) => compareRolesLowToHigh(b, a));
 
   // Discord lets two roles share a name. A blueprint cannot, because every
   // reference in private_to and posting_roles is by name, so a duplicate is

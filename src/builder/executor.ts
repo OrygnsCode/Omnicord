@@ -1,6 +1,7 @@
 import { Routes } from "discord-api-types/v10";
 import type {
   APIRole,
+  RESTPatchAPIGuildRolePositionsJSONBody,
   RESTPostAPIGuildChannelJSONBody,
   RESTPostAPIGuildRoleJSONBody,
 } from "discord-api-types/v10";
@@ -36,6 +37,22 @@ export interface BuildReport {
   created: number;
   reused: number;
   failed: boolean;
+  // Things that went imperfectly without stopping the build.
+  warnings: string[];
+  // How many roles this run created, and whether they were given explicit
+  // positions afterward. When not, they share position 1 and the hierarchy
+  // is held by creation order alone, which the client honors just the same.
+  rolesCreated: number;
+  stacked: boolean;
+}
+
+// The bulk reposition body for roles the build just created: first role in
+// blueprint order goes lowest, at position 1, and the rest stack upward.
+// Pure, so the shape is unit tested without a server.
+export function stackPositions(
+  createdRoleIds: string[]
+): RESTPatchAPIGuildRolePositionsJSONBody {
+  return createdRoleIds.map((id, i) => ({ id, position: i + 1 }));
 }
 
 export async function executePlan(
@@ -48,6 +65,9 @@ export async function executePlan(
   liveChannels: GuildChannelLite[]
 ): Promise<BuildReport> {
   const results: StepResult[] = [];
+  const warnings: string[] = [];
+  // Roles this run created, in blueprint order, for the reposition at the end.
+  const createdRoles: string[] = [];
 
   // Name-to-id maps, seeded from the live server and extended as the
   // build creates things. All keys lowercased.
@@ -115,6 +135,7 @@ export async function executePlan(
           reason: "Omnicord build",
         })) as APIRole;
         roleIds.set(role.name.toLowerCase(), role.id);
+        createdRoles.push(role.id);
         results.push({
           order: step.order,
           action: step.action,
@@ -227,10 +248,37 @@ export async function executePlan(
     }
   }
 
+  // Discord parks every role created through the API at position 1, so a
+  // batch of new roles ties, and the client breaks the tie by id, oldest
+  // highest. Blueprints list roles highest first and steps run in that
+  // order, so the top role gets the oldest id and the hierarchy is right the
+  // moment the roles exist, with no extra permission. This reposition is the
+  // finishing touch: distinct positions
+  // in the same order, which reads more cleanly in the client and in an
+  // export. It needs the bot's own role to sit above every position it
+  // assigns, which a fresh server never satisfies, so a refusal is expected
+  // there and costs nothing; the report records which way the order is held.
+  let stacked = false;
+  if (createdRoles.length > 0) {
+    try {
+      await rest.patch(Routes.guildRoles(guildId), {
+        // Created top-down; the body wants lowest first.
+        body: stackPositions([...createdRoles].reverse()),
+        reason: "Omnicord build",
+      });
+      stacked = true;
+    } catch {
+      stacked = false;
+    }
+  }
+
   return {
     results,
     created: results.filter((r) => r.status === "created").length,
     reused: results.filter((r) => r.status === "reused").length,
     failed: results.some((r) => r.status === "failed"),
+    warnings,
+    rolesCreated: createdRoles.length,
+    stacked,
   };
 }

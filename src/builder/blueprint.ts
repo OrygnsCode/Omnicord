@@ -64,7 +64,14 @@ export const blueprintSchema = z.object({
     .describe("Optional label for saving or referencing this blueprint."),
   theme: z.string().max(500).optional()
     .describe("Freeform note recording the intent and naming style."),
-  roles: z.array(blueprintRoleSchema).max(50).optional(),
+  roles: z
+    .array(blueprintRoleSchema)
+    .max(50)
+    .optional()
+    .describe(
+      "Highest role first, the way the server settings list them. A build " +
+        "creates them in this order and that order is the hierarchy."
+    ),
   categories: z.array(blueprintCategorySchema).max(50).optional(),
   channels: z
     .array(blueprintChannelSchema)

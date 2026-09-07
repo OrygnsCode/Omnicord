@@ -692,8 +692,8 @@ const xChannels = [
 const exported = exportBlueprint(xChannels, xRoles, XG, { botUserId: XBOT });
 const bp = exported.blueprint;
 check((bp.roles ?? []).length === 2, "export skips everyone and managed roles");
-check(bp.roles[0].name === "Member" && bp.roles[1].name === "Mod", "export orders roles bottom first");
-check(bp.roles[1].color === "#ff8800" && bp.roles[1].hoist === true, "export keeps role color and hoist");
+check(bp.roles[0].name === "Mod" && bp.roles[1].name === "Member", "export orders roles highest first");
+check(bp.roles[0].color === "#ff8800" && bp.roles[0].hoist === true, "export keeps role color and hoist");
 const staffCat = (bp.categories ?? []).find((c) => c.name === "Staff");
 check(staffCat && setLikeEquals(staffCat.private_to, ["Mod"]), "export decompiles category privacy");
 check(staffCat.channels[0].name === "staff-chat" && staffCat.channels[0].private_to === undefined, "synced child omits inherited privacy");
@@ -725,7 +725,9 @@ const dupRoles = [
 const dupExport = exportBlueprint([], dupRoles, XG, {});
 const dupNames = (dupExport.blueprint.roles ?? []).map((r) => r.name);
 check(new Set(dupNames.map((n) => n.toLowerCase())).size === dupNames.length, "export renames duplicate role names apart");
-check(dupNames[0] === "Blue", "the highest duplicate keeps the original name");
+// Highest first, so the position-3 "blue" is seen first and keeps its name;
+// the two lower "Blue"s get the suffixes, matching the warning's wording.
+check(dupNames[0] === "blue", "the highest duplicate keeps the original name");
 check(dupExport.warnings.some((w) => w.includes("More than one role is named")), "a renamed duplicate is reported, not silent");
 check(planFromExport(dupExport.blueprint, emptyTarget).errors.length === 0, "a duplicate-name export still plans cleanly");
 
@@ -1332,6 +1334,62 @@ check(
 check(textFromComponents({ type: 10, content: "bare" }) === "bare", "a single component object works, not just an array");
 check(textFromComponents(null) === "", "null is handled");
 check(textFromComponents("string") === "", "a non-object is handled");
+}
+
+// Role hierarchy: the client's tie-break, and how a build stacks new roles
+
+{
+const { compareRolesLowToHigh } = await import("../dist/discord/preflight.js");
+const { stackPositions } = await import("../dist/builder/executor.js");
+
+const older = { id: "1546580250975150250", position: 1 };
+const newer = { id: "1546580261460910231", position: 1 };
+check(compareRolesLowToHigh(newer, older) < 0, "on a tied position the newer id sorts lower");
+check(compareRolesLowToHigh(older, newer) > 0, "on a tied position the older id sorts higher");
+check(compareRolesLowToHigh(older, older) === 0, "a role compares equal to itself");
+check(compareRolesLowToHigh({ id: "1", position: 2 }, { id: "999", position: 5 }) < 0, "a lower position sorts lower whatever the ids");
+check(compareRolesLowToHigh({ id: "999", position: 5 }, { id: "1", position: 2 }) > 0, "a higher position sorts higher whatever the ids");
+
+// The three roles from the live run on 2026-09-07: all parked at position
+// 1 by Discord, created low, mid, high. The client showed low on top.
+const live = [
+  { name: "hier-low", id: "1546580250975150250", position: 1 },
+  { name: "hier-mid", id: "1546580260747870259", position: 1 },
+  { name: "hier-high", id: "1546580261460910231", position: 1 },
+];
+const lowToHigh = [...live].sort(compareRolesLowToHigh).map((r) => r.name);
+check(lowToHigh.join(",") === "hier-high,hier-mid,hier-low", "tied API-created roles rank first-created highest, as the client shows them");
+const highToLow = [...live].sort((a, b) => compareRolesLowToHigh(b, a)).map((r) => r.name);
+check(highToLow[0] === "hier-low" && highToLow[2] === "hier-high", "swapping the arguments lists highest first");
+// Input order must not leak through on ties.
+const shuffled = [live[2], live[0], live[1]].sort(compareRolesLowToHigh).map((r) => r.name);
+check(shuffled.join(",") === lowToHigh.join(","), "the tie-break does not depend on input order");
+
+const body = stackPositions(["a", "b", "c"]);
+check(JSON.stringify(body) === JSON.stringify([{ id: "a", position: 1 }, { id: "b", position: 2 }, { id: "c", position: 3 }]), "stackPositions puts the first created role lowest, at 1, and stacks upward");
+check(stackPositions([]).length === 0, "stackPositions of nothing is empty");
+
+// Export reads a tied hierarchy the way the client shows it, not in API
+// order, and lists roles highest first: the order a build creates them, so
+// the top role gets the oldest id and wins the tie on a rebuild. Three
+// roles all at position 1, returned by the API oldest first (which is how
+// Discord actually returns them).
+{
+const { exportBlueprint } = await import("../dist/builder/export.js");
+const TG = "700000000000000000";
+const tied = [
+  { id: TG, name: "@everyone", permissions: "0", position: 0 },
+  { id: "700000000000000001", name: "Admin", permissions: "0", position: 1 },
+  { id: "700000000000000002", name: "Mod", permissions: "0", position: 1 },
+  { id: "700000000000000003", name: "Member", permissions: "0", position: 1 },
+];
+const tiedExport = exportBlueprint([], tied, TG, {});
+const order = tiedExport.blueprint.roles.map((r) => r.name).join(",");
+check(order === "Admin,Mod,Member", "export lists tied roles highest first by the client rule, oldest id on top");
+// Same roles handed over in a different API order must export identically.
+const reordered = exportBlueprint([], [tied[0], tied[3], tied[1], tied[2]], TG, {});
+check(reordered.blueprint.roles.map((r) => r.name).join(",") === order, "export order on ties does not depend on API order");
+}
 }
 
 if (failures > 0) {
