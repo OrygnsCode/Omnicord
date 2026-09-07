@@ -77,17 +77,19 @@ Every tool returns the same envelope:
 {
   "summary":  "One to three plain sentences describing what happened or what was found.",
   "data":     { ... },        // typed payload, documented per tool
-  "warnings": [ "..." ],      // non-fatal notes: missing optional perms, partial results
-  "cursor":   "..." | null,   // present when more results exist
-  "candidates": [ ... ]       // present only when name resolution was ambiguous
+  "warnings": [ "..." ]       // non-fatal notes: missing optional perms, partial results
 }
 ```
 
-`summary` exists so the model never has to narrate raw JSON back to the user. `data` is kept lean: snowflakes, names, and the fields a caller actually acts on, not the full Discord API object. A `raw: true` parameter is accepted everywhere for callers that want the unmodified API response.
+Three fields, always these three. `summary` exists so the model never has to narrate raw JSON back to the user. `data` is kept lean: snowflakes, names, and the fields a caller actually acts on, not the full Discord API object.
+
+When name resolution is ambiguous the tool returns an error envelope whose `data.candidates` holds the options, rather than guessing. There is no top-level `candidates` field and no `raw` parameter.
 
 ### 1.6 Pagination
 
-List tools accept `limit` (default 25, max 100) and `cursor`. They return `cursor` when more data exists. No tool ever returns an unbounded list.
+There is no cursor and no general pagination. Ten tools take a `limit`, capped at 100 where Discord caps it: `read_messages`, `search_messages`, `search_members`, `list_members`, `list_bans`, `get_role_members`, `get_audit_log`, `get_reactions`, `get_event_attendees`, and `get_recent_events`. Three of those page with a Discord ID rather than an opaque cursor: `read_messages` takes `before`, and `list_bans` and `list_members` take `after`.
+
+Everything else returns the full set for the guild, which is bounded by Discord's own limits (500 roles, 500 channels, 50 templates and so on) rather than by anything Omnicord does.
 
 ### 1.7 Errors and preflight
 
@@ -149,9 +151,9 @@ The 15 always-loaded tools. Chosen so that the two headline flows (chat and oper
 |---|---|---|---|---|
 | list_servers | no | none | (none) | Every server across all configured bots, each labeled with the bot that reaches it, with IDs and approximate member counts. With multiple bots this is the routing map; any unreachable bot (bad token) is flagged. Use get_server_overview for one server's detail. |
 | get_server_overview * | no | none | guild | Structured snapshot: name, owner, boost level, features, counts of channels, roles, members, emojis, plus a category-grouped channel outline. |
-| update_server | no | Manage Guild | guild, name, description, icon, banner, verification_level, default_notifications, system_channel, rules_channel, afk_channel, afk_timeout, locale | Edits guild settings. Only passed fields change. |
+| update_server | no | Manage Guild | guild, name, description, verification_level, afk_channel, afk_timeout_seconds (60, 300, 900, 1800, 3600), system_channel, rules_channel, public_updates_channel, community | Edits guild settings. Only passed fields change. Icon, banner, default notifications, and locale are not editable here. |
 | get_server_preview | no | none | guild | Public preview data for a discoverable guild. |
-| get_audit_log | no | View Audit Log | guild, action_type, user, before, limit | Recent audit entries, summarized per entry (who did what to what, when). |
+| get_audit_log | no | View Audit Log | guild, action, user, limit | Recent audit entries, summarized per entry (who did what to what, when). Not paginated. |
 | get_server_widget | no | Manage Guild | guild | Widget settings and invite channel. |
 | update_server_widget | no | Manage Guild | guild, enabled, channel | Enables or points the widget. |
 | get_welcome_screen | no | Manage Guild | guild | Welcome screen description and channel cards. |
@@ -159,29 +161,29 @@ The 15 always-loaded tools. Chosen so that the two headline flows (chat and oper
 | get_onboarding | no | Manage Guild | guild | Onboarding prompts, options, and default channels. |
 | update_onboarding | no | Manage Guild + Manage Roles + Manage Channels | guild, prompts[], default_channels[], enabled, mode | Edits the new-member onboarding flow. |
 | list_integrations | no | Manage Guild | guild | Installed integrations (bots, Twitch, YouTube). |
-| delete_integration | yes | Manage Guild | guild, integration | Removes an integration. |
+| delete_integration | yes | Manage Guild | guild, integration_id, reason | Removes an integration. |
 | list_server_templates | no | Manage Guild | guild | Templates created from this guild. |
 | create_server_template | no | Manage Guild | guild, name, description | Snapshots the guild as a Discord template. |
-| sync_server_template | no | Manage Guild | guild, template_code | Re-syncs a template to current guild state. |
-| delete_server_template | yes | Manage Guild | guild, template_code | Deletes a template. |
+| sync_server_template | no | Manage Guild | guild, code | Re-syncs a template to current guild state. |
+| delete_server_template | yes | Manage Guild | guild, code | Deletes a template. |
 
 ## 4. Channels and categories (15 tools)
 
 | Tool | D | Requires | Key parameters | Summary |
 |---|---|---|---|---|
-| list_channels * | no | none | guild, type, category | All channels grouped by category, with type, topic, and position. Filterable. |
+| list_channels * | no | none | guild, type | All channels grouped by category, with type, topic, and position. Filterable by type. |
 | get_channel | no | none | channel | Full detail for one channel: settings, permission overwrite summary, forum tags if applicable, active thread count. |
-| create_channel * | no | Manage Channels | guild, name, type (text, voice, forum, stage, announcement, category), category, topic, slowmode, nsfw, bitrate, user_limit, region, default_tags[], position, overwrites[] | Creates any channel type. Accepts permission overwrites inline so a private channel is one call, not three. |
-| update_channel | no | Manage Channels | channel, name, topic, category, slowmode, nsfw, bitrate, user_limit, region, position, default_tags[] | Edits channel settings. Only passed fields change. |
+| create_channel * | no | Manage Channels | guild, name, type (text, voice, forum, stage, announcement, category), category, topic, slowmode_seconds, nsfw | Creates any channel type. Overwrites are not set here: use `set_channel_permissions` afterwards, or the visibility sugar in a blueprint, which compiles them at creation. Bitrate, user limit, region, position, and forum tags are not settable. |
+| update_channel | no | Manage Channels | channel, guild, name, topic, category, slowmode_seconds, nsfw | Edits channel settings. Only passed fields change. Bitrate, user limit, region, position, and forum tags are not settable. Reordering is `reorder_channels`. |
 | delete_channel | yes | Manage Channels | channel | Deletes a channel and everything in it. Dry run reports message and thread counts that would be lost. |
-| clone_channel | no | Manage Channels | channel, new_name, include_overwrites | Copies a channel's settings and overwrites into a new channel. |
+| clone_channel | no | Manage Channels | channel, guild, new_name | Copies a channel's settings and permission overwrites into a new channel. Overwrites always come along; there is no opt out. |
 | reorder_channels | no | Manage Channels | guild, moves[] (channel, position, category) | Batch position and category moves in one call. |
 | get_channel_permissions | no | none | channel | Overwrites on the channel, resolved into plain language per role and member. |
 | set_channel_permissions | no | Manage Roles | channel, target (role or member), allow[], deny[] | Sets one overwrite. Preflights bot hierarchy. |
 | clear_channel_permissions | yes | Manage Roles | channel, target | Removes an overwrite, restoring inheritance. |
 | lock_channel | no | Manage Roles | channel, reason | Denies send for @everyone, posts an optional notice. Stores prior state. |
 | unlock_channel | no | Manage Roles | channel | Restores the state saved by lock_channel. |
-| follow_announcement_channel | no | Manage Webhooks | source_channel, target_channel | Subscribes a channel to an announcement channel. |
+| follow_announcement_channel | no | Manage Webhooks | guild, source, target | Subscribes a channel to an announcement channel. |
 | list_voice_members | no | none | channel | Who is in a voice or stage channel, with mute and deafen state. |
 | set_voice_channel_status | no | Manage Channels | channel, status (up to 500 characters, empty clears) | Sets the live status line shown on a voice channel. This is the status, not the topic. |
 
@@ -189,10 +191,10 @@ The 15 always-loaded tools. Chosen so that the two headline flows (chat and oper
 
 | Tool | D | Requires | Key parameters | Summary |
 |---|---|---|---|---|
-| create_thread | no | Create Public Threads | channel, name, message_id (optional, to branch from a message), private, auto_archive, slowmode | Creates a thread, standalone or from a message. Private threads require Create Private Threads. |
+| create_thread | no | Create Public Threads | channel, guild, name, message_id (optional, to branch from a message), private, auto_archive_minutes (60, 1440, 4320, 10080), slowmode_seconds | Creates a thread, standalone or from a message. Private threads require Create Private Threads. |
 | list_threads | no | none | channel or guild, include_archived | Active threads, and archived when asked, with parent and last-activity info. |
 | get_thread | no | none | thread | One thread's settings, member count, and state. |
-| update_thread | no | Manage Threads | thread, name, archived, locked, slowmode, auto_archive | Edits thread state. Archive and lock live here. |
+| update_thread | no | Manage Threads | thread, guild, name, archived, locked, slowmode_seconds, auto_archive_minutes (60, 1440, 4320, 10080) | Edits thread state. Archive and lock live here. |
 | delete_thread | yes | Manage Threads | thread | Deletes a thread and its messages. |
 | list_thread_members | no | none | thread | Members of a thread. |
 | add_thread_member | no | none | thread, member | Adds a member to a thread. |
@@ -202,32 +204,32 @@ The 15 always-loaded tools. Chosen so that the two headline flows (chat and oper
 
 | Tool | D | Requires | Key parameters | Summary |
 |---|---|---|---|---|
-| create_forum_post | no | Send Messages | channel, title, content, tags[], files[] | Starts a forum post with applied tags. |
-| list_forum_posts | no | none | channel, tag, include_archived, limit | Posts in a forum, filterable by tag. |
-| reply_to_forum_post | no | Send Messages in Threads | post, content, files[] | Replies inside a forum post. |
+| create_forum_post | no | Send Messages | forum, guild, title, content, tags[] | Starts a forum post with applied tags. |
+| list_forum_posts | no | none | forum, guild, tag, include_archived | Posts in a forum, filterable by tag. |
+| reply_to_forum_post | no | Send Messages in Threads | post, guild, content, embeds[] | Replies inside a forum post. |
 | update_forum_post | no | Manage Threads (others' posts) | post, title, tags[], pinned, locked, archived | Edits post metadata and state. |
 | delete_forum_post | yes | Manage Threads | post | Deletes a forum post. |
-| create_forum_tag | no | Manage Channels | channel, name, emoji, moderated | Adds an available tag to a forum. |
-| update_forum_tag | no | Manage Channels | channel, tag, name, emoji, moderated | Edits a tag. |
-| delete_forum_tag | yes | Manage Channels | channel, tag | Removes a tag from the forum and all posts. |
+| create_forum_tag | no | Manage Channels | forum, guild, name, moderated | Adds an available tag to a forum. Tag emoji are not settable. |
+| update_forum_tag | no | Manage Channels | forum, guild, tag, name, moderated | Edits a tag. |
+| delete_forum_tag | yes | Manage Channels | forum, guild, tag | Removes a tag from the forum and all posts. |
 
 ## 7. Messages (16 tools)
 
 | Tool | D | Requires | Key parameters | Summary |
 |---|---|---|---|---|
-| send_message * | no | Send Messages | channel, content, reply_to, embeds[], components (Components V2 layout blocks), files[], silent, allowed_mentions | Sends a message. Components V2 containers, sections, and galleries are first-class. allowed_mentions defaults to none so the model cannot mass-ping by accident. |
-| read_messages * | no | Message Content intent | channel, limit, before, after, around, include_thread_starters | Returns a digest: messages with author, role context, timestamps, reply chains resolved, attachments summarized. Not a raw dump. |
+| send_message * | no | Send Messages | channel, guild, content, reply_to, embeds[], mentions (none, users, roles_and_users, everything), silent | Sends a message. `mentions` defaults to none so the model cannot mass-ping by accident. |
+| read_messages * | no | Message Content intent | channel, guild, limit, before | Returns a digest: messages with author, role context, timestamps, reply chains resolved, attachments summarized. Not a raw dump. Paging is backwards only, via `before`. |
 | get_message | no | Message Content intent | channel, message_id | One message in full detail, including reactions and components. |
-| edit_message | no | own messages: none | channel, message_id, content, embeds[], components | Edits a bot-authored message. |
+| edit_message | no | own messages: none | channel, guild, message_id, content, embeds[] | Edits a bot-authored message. |
 | delete_message | yes | Manage Messages (others') | channel, message_id, reason | Deletes one message. |
-| bulk_delete_messages | yes | Manage Messages | channel, count or message_ids[], filter (author, contains, has) | Bulk delete up to 100 messages under 14 days old. Dry run returns the exact list. |
+| bulk_delete_messages | yes | Manage Messages | channel, guild, count, from_author, contains | Bulk delete up to 100 messages under 14 days old, newest first, optionally narrowed by author or substring. Explicit message IDs are not accepted. Dry run returns the exact list. |
 | search_messages * | no | Read Message History; Message Content intent | query, channel, author, has (image, video, sound, file, sticker, embed, link, poll, snapshot), pinned, sort (recent, relevant), limit, offset | Full-text search over Discord's server message index. Matches whole words across every channel the bot can read, or one named channel, and looks inside embeds and polls, not just message text. Reports the total match count. |
 | pin_message | no | Pin Messages | channel, message_id | Pins. Preflights the post-Feb-2026 PIN_MESSAGES permission. |
 | unpin_message | no | Pin Messages | channel, message_id | Unpins. |
 | list_pinned_messages | no | none | channel | Pinned messages with author and date. |
 | crosspost_message | no | Manage Messages | channel, message_id | Publishes an announcement-channel message to followers. |
 | forward_message | no | Send Messages | channel, from_channel, message_id, content | Forwards a message from one channel into another as a quoted snapshot, the way the client's forward does. An optional note posts as its own message just before the forward, since Discord does not allow text on a forward. |
-| send_dm | no | none | user, content, embeds[] | Direct message to a user who shares a guild with the bot. Fails gracefully when DMs are closed. |
+| send_dm | no | none | user, guild, content | Direct message to a user who shares a guild with the bot. Text only. Fails gracefully when DMs are closed. |
 | schedule_message | no | Send Messages | channel, content, send_at, repeat (none, daily, weekly, cron) | Omnicord-side scheduler. Survives restarts. |
 | list_scheduled_messages | no | none | guild | Pending scheduled messages. |
 | cancel_scheduled_message | yes | none | schedule_id | Cancels a scheduled message. |
@@ -249,8 +251,8 @@ The 15 always-loaded tools. Chosen so that the two headline flows (chat and oper
 | Tool | D | Requires | Key parameters | Summary |
 |---|---|---|---|---|
 | list_roles * | no | none | guild | Roles with color, position, member count, and a permission digest in plain language. |
-| create_role * | no | Manage Roles | guild, name, color, permissions[] or preset (member, moderator, admin), hoist, mentionable, icon | Creates a role. Presets map to vetted permission bundles so the model does not hand out Administrator by reflex. |
-| update_role | no | Manage Roles | role, name, color, permissions[], hoist, mentionable, icon | Edits a role. Hierarchy preflighted. |
+| create_role * | no | Manage Roles | guild, name, color, permissions[] or preset (member, moderator, admin), hoist, mentionable | Creates a role. Presets map to vetted permission bundles so the model does not hand out Administrator by reflex. Role icons are not settable. |
+| update_role | no | Manage Roles | role, guild, name, color, permissions[] or preset, hoist, mentionable | Edits a role. Hierarchy preflighted. Role icons are not settable. |
 | delete_role | yes | Manage Roles | role | Deletes a role. Dry run reports member count losing it. |
 | clone_role | no | Manage Roles | role, new_name | Copies a role's permissions and settings. |
 | reorder_roles | no | Manage Roles | guild, moves[] (role, position) | Batch hierarchy changes. |
@@ -263,22 +265,22 @@ The 15 always-loaded tools. Chosen so that the two headline flows (chat and oper
 
 | Tool | D | Requires | Key parameters | Summary |
 |---|---|---|---|---|
-| search_members * | no | Members intent | guild, query, role, joined_before, joined_after, is_bot, limit | Finds members by name fragment or filters. |
+| search_members * | no | Members intent | guild, query, role, limit | Finds members by name fragment, optionally narrowed to one role. For join-date and bot filters see `bulk_update_roles`, whose `filter` object carries them. |
 | list_members | no | Members intent | guild, limit, cursor | Paged member roster. |
-| get_member * | no | none | member | Profile: roles, join date, timeout state, voice state, key permissions. |
-| update_member | no | varies by field | member, nickname (Manage Nicknames), roles[] (Manage Roles), voice_channel (Move Members), mute, deafen (Mute/Deafen Members) | Multi-field member edit, including moving them between voice channels. |
+| get_member * | no | none | user, guild | Profile: roles, join date, timeout state, voice state, key permissions. |
+| update_member | no | varies by field | member, guild, nickname (Manage Nicknames), move_to_voice (Move Members), server_mute, server_deafen (Mute/Deafen Members), reason | Multi-field member edit, including moving them between voice channels. Role changes go through `assign_role` and `remove_role`. |
 | get_member_permissions | no | none | member, channel | Effective permissions for a member in a channel, resolved through roles and overwrites, in plain language. |
 | disconnect_member | yes | Move Members | member, reason | Kicks a member out of voice. |
-| prune_members | yes | Kick Members + Manage Guild | guild, days_inactive, include_roles[] | Removes inactive members. Dry run uses Discord's native prune-count endpoint for an exact preview. |
+| prune_members | yes | Kick Members + Manage Guild | guild, days, reason | Removes members inactive for `days`. Dry run uses Discord's native prune-count endpoint for an exact preview. |
 
 ## 11. Moderation (12 tools)
 
 | Tool | D | Requires | Key parameters | Summary |
 |---|---|---|---|---|
-| timeout_member | yes | Moderate Members | member, duration (up to 28 days), reason | Times a member out. Reason lands in the audit log. |
+| timeout_member | yes | Moderate Members | member, guild, duration_minutes (up to 28 days), reason | Times a member out. Reason lands in the audit log. |
 | remove_timeout | no | Moderate Members | member | Lifts a timeout. |
 | kick_member | yes | Kick Members | member, reason | Removes a member. They can rejoin with an invite. |
-| ban_member | yes | Ban Members | member or user_id, reason, delete_message_seconds | Bans, optionally deleting recent messages. Works on users no longer in the guild. |
+| ban_member | yes | Ban Members | user, guild, reason, delete_message_seconds | Bans, optionally deleting recent messages. `user` takes a name or an ID, so it works on users no longer in the guild. |
 | unban_member | no | Ban Members | user_id, reason | Lifts a ban. |
 | bulk_ban | yes | Ban Members + Manage Guild | user_ids[] (up to 200), reason, delete_message_seconds | Mass ban, for raid cleanup. Dry run lists every target. |
 | list_bans | no | Ban Members | guild, limit, cursor | Current bans with reasons. |
@@ -292,7 +294,7 @@ The 15 always-loaded tools. Chosen so that the two headline flows (chat and oper
 
 | Tool | D | Requires | Key parameters | Summary |
 |---|---|---|---|---|
-| create_invite | no | Create Invite | channel, max_age, max_uses, temporary, unique | Makes an invite link with explicit lifetime defaults (24h, 0 = infinite must be asked for). |
+| create_invite | no | Create Invite | channel, guild, max_age_seconds, max_uses, temporary | Makes an invite link with explicit lifetime defaults (24h, 0 = infinite must be asked for). |
 | list_invites | no | Manage Guild | guild or channel | Active invites with uses and creators. |
 | get_invite | no | none | code | Inspects an invite: guild, channel, expiry, use count. |
 | delete_invite | yes | Manage Channels | code | Revokes an invite. |
@@ -302,26 +304,26 @@ The 15 always-loaded tools. Chosen so that the two headline flows (chat and oper
 | Tool | D | Requires | Key parameters | Summary |
 |---|---|---|---|---|
 | list_webhooks | no | Manage Webhooks | guild or channel | Webhooks with their target channels. Tokens are never returned in summaries. |
-| create_webhook | no | Manage Webhooks | channel, name, avatar | Creates a webhook. |
-| update_webhook | no | Manage Webhooks | webhook, name, avatar, channel | Edits a webhook. |
+| create_webhook | no | Manage Webhooks | channel, guild, name, avatar_url | Creates a webhook. |
+| update_webhook | no | Manage Webhooks | webhook, guild, name, avatar_url, channel | Edits a webhook. |
 | delete_webhook | yes | Manage Webhooks | webhook | Deletes a webhook. |
-| send_webhook_message | no | none (token-auth) | webhook, content, username_override, avatar_override, embeds[], thread | Posts via webhook with optional identity override. |
+| send_webhook_message | no | none (token-auth) | webhook, guild, content, username_override, avatar_url_override, embeds[] | Posts via webhook with optional identity override. Posting into a specific thread is not supported. |
 
 ## 14. Expressions: emojis, stickers, soundboard (12 tools)
 
 | Tool | D | Requires | Key parameters | Summary |
 |---|---|---|---|---|
 | list_emojis | no | none | guild | Custom emojis with usage hints. |
-| create_emoji | no | Create Expressions | guild, name, image (URL or file) | Uploads a custom emoji. |
-| update_emoji | no | Manage Expressions | emoji, name, roles[] | Renames or role-restricts an emoji. |
+| create_emoji | no | Create Expressions | guild, name, image_url | Uploads a custom emoji from a URL. |
+| update_emoji | no | Manage Expressions | emoji, guild, name | Renames an emoji. Restricting one to roles is not supported. |
 | delete_emoji | yes | Manage Expressions | emoji | Deletes an emoji. |
 | list_stickers | no | none | guild | Custom stickers. |
-| create_sticker | no | Create Expressions | guild, name, description, tags, file | Uploads a sticker. |
+| create_sticker | no | Create Expressions | guild, name, description, tags, image_url | Uploads a sticker from a URL. |
 | update_sticker | no | Manage Expressions | sticker, name, description, tags | Edits sticker metadata. |
 | delete_sticker | yes | Manage Expressions | sticker | Deletes a sticker. |
 | list_soundboard_sounds | no | none | guild | Soundboard sounds with volume and emoji. |
-| create_soundboard_sound | no | Create Expressions | guild, name, sound (file), volume, emoji | Uploads a soundboard sound. |
-| update_soundboard_sound | no | Manage Expressions | sound, name, volume, emoji | Edits a sound. |
+| create_soundboard_sound | no | Create Expressions | guild, name, sound_url, volume, emoji | Uploads a soundboard sound from a URL. |
+| update_soundboard_sound | no | Manage Expressions | sound, guild, name, volume | Edits a sound. Its emoji is set at upload and not editable. |
 | delete_soundboard_sound | yes | Manage Expressions | sound | Deletes a sound. |
 
 ## 15. Scheduled events (6 tools)
@@ -330,7 +332,7 @@ The 15 always-loaded tools. Chosen so that the two headline flows (chat and oper
 |---|---|---|---|---|
 | list_events | no | none | guild | Upcoming events with type, time, and interest counts. |
 | get_event | no | none | event | One event in detail. |
-| create_event | no | Create Events | guild, name, description, type (voice, stage, external), channel or location, start_time, end_time, repeat (daily, weekly, biweekly, monthly), image | Creates a scheduled event, optionally recurring. |
+| create_event | no | Create Events | guild, name, description, type (voice, stage, external), channel or location, start_time, end_time, repeat (daily, weekly, biweekly, monthly) | Creates a scheduled event, optionally recurring. |
 | update_event | no | Manage Events | event, same fields as create, status | Edits or starts an event. |
 | cancel_event | yes | Manage Events | event | Cancels an event. |
 | get_event_attendees | no | none | event, limit | Users marked interested. |
@@ -340,7 +342,7 @@ The 15 always-loaded tools. Chosen so that the two headline flows (chat and oper
 | Tool | D | Requires | Key parameters | Summary |
 |---|---|---|---|---|
 | list_stages | no | none | guild | Live stage instances. |
-| start_stage | no | Manage Channels (stage) | channel, topic, privacy, send_notification | Goes live in a stage channel. |
+| start_stage | no | Manage Channels (stage) | channel, guild, topic, notify | Goes live in a stage channel. |
 | update_stage | no | Manage Channels (stage) | channel, topic | Changes the live topic. |
 | end_stage | yes | Manage Channels (stage) | channel | Ends the stage instance. |
 
@@ -352,7 +354,7 @@ The 15 always-loaded tools. Chosen so that the two headline flows (chat and oper
 | register_app_command | no | app owner | name, description, options[], guild, bot | Registers a slash command, or updates it in place when the name already exists. Guild commands appear immediately; global ones can take an hour and are rate limited per day. Required options are sent before optional ones, as Discord requires. Subcommands and subcommand groups are not supported. |
 | update_app_command | no | app owner | command, description, options[], guild, bot | Edits a command by name or ID. Sending options replaces the whole list. |
 | delete_app_command | yes | app owner | command, guild, bot | Unregisters a command. Registering it again restores it. |
-| set_bot_presence | no | none | status (online, idle, dnd, invisible), activity_type, activity_text | Sets the bot's presence. |
+| set_bot_presence | no | none | status (online, idle, dnd, invisible), activity_text | Sets the bot's presence. The activity type is not selectable. |
 | get_bot_info | no | none | bot (optional) | Application info, guild count, enabled intents, library and Omnicord versions. The first diagnostics stop. Pass bot to inspect a specific bot when several are configured. |
 
 ## 18. Builder (10 tools)
@@ -386,9 +388,9 @@ Real-time gateway events surfaced through MCP. No notable competitor ships this.
 
 | Tool | D | Requires | Key parameters | Summary |
 |---|---|---|---|---|
-| subscribe_events | no | intents vary by type | guild, types[] (message_created, member_joined, member_left, reaction_added, channel_created, role_changed, ban_added, voice_state_changed), channel_filter, delivery (notification, buffer) | Subscribes to gateway events. Notification delivery pushes MCP notifications; buffer delivery stores events for polling. |
+| subscribe_events | no | intents vary by type | guild, types[] (14: message_created, message_deleted, member_joined, member_left, reaction_added, reaction_removed, channel_created, channel_deleted, role_created, role_updated, role_deleted, ban_added, ban_removed, voice_state_changed), channel, include_bots | Records gateway events into a buffer you then read with `get_recent_events`. There is no push delivery; nothing is sent to the client unprompted. |
 | unsubscribe_events | no | none | subscription_id | Ends a subscription. |
-| list_event_subscriptions | no | none | guild | Active subscriptions. |
+| list_event_subscriptions | no | none | (none) | Active subscriptions, across every guild. |
 | get_recent_events | no | none | subscription_id, limit, cursor | Drains buffered events, for clients that cannot receive notifications. |
 
 ## 20. Diagnostics and utility (4 tools)
@@ -396,7 +398,7 @@ Real-time gateway events surfaced through MCP. No notable competitor ships this.
 | Tool | D | Requires | Key parameters | Summary |
 |---|---|---|---|---|
 | run_setup_check * | no | none | bot (optional) | End-to-end health check: token presence and validity, the three privileged intents (enabled in the portal versus needed), guild count against the verification gate, gateway connection, and default-guild membership. Pass bot to check a specific bot when several are configured. Output is a plain-English pass or fix list. Run on first connect and whenever things act weird. |
-| explain_permissions | no | none | actor (bot or member), action, channel | Answers "can X do Y in Z, and if not, why not" by resolving the full permission chain. The preflight engine, exposed. |
+| explain_permissions | no | none | actor (bot or member), permission, guild, channel | Answers "can X do Y in Z, and if not, why not" by resolving the full permission chain. The preflight engine, exposed. |
 | get_rate_limit_status | no | none | (none) | Current bucket states, queue depth, and invalid-request counter. |
 | find * | no | none | query, types[] (channel, role, member, emoji, thread, event), guild | The fuzzy resolver as a tool. Returns ranked candidates with IDs and context so the caller can disambiguate once and reuse the ID. |
 
