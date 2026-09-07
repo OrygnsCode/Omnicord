@@ -453,7 +453,13 @@ try {
 
   // Raw REST access for verification and cleanup; delete tools arrive in
   // a later phase.
+  // Same lookup order as the server: OMNICORD_HOME first, then the package
+  // root, and a variable already in the environment wins over both. A test
+  // config kept out of the repo therefore governs these calls too, rather
+  // than only the server under test.
   const { config: loadDotenv } = await import("dotenv");
+  const home = process.env.OMNICORD_HOME?.trim();
+  if (home) loadDotenv({ path: join(home, ".env"), quiet: true });
   loadDotenv({ path: join(root, ".env"), quiet: true });
   const token = process.env.DISCORD_TOKEN;
   const guildId = process.env.OMNICORD_GUILD;

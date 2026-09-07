@@ -4,6 +4,78 @@ All notable changes to Omnicord are recorded here. The format follows
 Keep a Changelog, and the project follows semantic versioning. Version
 1.0.0 marked the public launch; releases since follow semver.
 
+## 1.4.0 (2026-09-07)
+
+Rich message layouts, private channels in one call, and a fix to how
+blueprints carry the role hierarchy, found by rebuilding a server onto a
+second one and watching the roles come out upside down.
+
+### Added
+
+- **Components V2 layouts.** `send_message` and `edit_message` take a
+  `components` array: text blocks, sections with a thumbnail or link button
+  beside them, image galleries, separators, and rows of link buttons, inside
+  colored containers. Discord renders these as a whole-message layout in
+  place of content and embeds, under a flag that cannot be removed from the
+  message afterward, so the two cannot be combined and the tools refuse to
+  try. Buttons are link buttons only: a button that fires an interaction
+  needs a process answering on the gateway within three seconds, which this
+  server is not, and would fail for everyone who clicked it. File components
+  are out for a different reason: they accept only `attachment://`
+  references and there is no upload path. The 40-component limit is checked
+  before sending, counted the way Discord counts it, where a section is three
+  and a button row is one plus each button.
+
+  Reading these messages back works. Discord leaves `content` empty on them,
+  so the digest every read tool shares pulls the text out of the components
+  and marks the message `components_v2`.
+
+  Costs about 5 KB in `tools/list`, spread over the two tools.
+- **Private and read-only channels in one call.** `create_channel` takes
+  `private_to`, `read_only`, and `posting_roles`, the same visibility sugar a
+  blueprint uses, compiled to permission overwrites and applied in the create
+  request. Naming `@everyone` in `private_to` is refused, in blueprints too:
+  it denied view to everyone and granted it straight back, which Discord
+  resolves toward the allow, so the channel came out public.
+
+### Changed
+
+- **Blueprints list roles highest first**, the way the server settings show
+  them, and that order is the hierarchy. See the fix below for why. Blueprints
+  written by hand, and the three shipped reference layouts, were already in
+  this order. A blueprint saved from `export_server_blueprint` before this
+  release is lowest first and will rebuild inverted, as it also did before;
+  export it again.
+- Blueprint caps match Discord's own limits, 250 roles and 500 channels, where
+  the schema allowed 50 and 100. The planner already checked the real limits
+  against the live server; the tighter caps only made a server with more than
+  50 roles unexportable.
+- `list_roles` and `export_server_blueprint` order roles that share a position
+  the way the client does, by id with the older role higher, rather than in
+  whatever order the API returned them.
+
+### Fixed
+
+- **A blueprint rebuild inverted the role hierarchy.** Discord gives every
+  role created through the API position 1, so a batch of new roles ties, and
+  the client ranks tied roles by id with the older one higher. Export listed
+  roles lowest first and the build created them in that order, so the bottom
+  role got the oldest id and came out on top. Roles are now created top-down,
+  which needs no extra permission and holds on a fresh server, where the bot's
+  own role sits at position 1 and Discord will not let it move anything above
+  itself. A bulk reposition still runs afterward where the bot's role allows
+  it, and the result reports `role_positions` either way.
+- `export_server_blueprint` produced blueprints that `plan_server_build`
+  rejected on a server with two roles sharing a name, or with an integration
+  role granted access to a private channel. Duplicates now get a numeric
+  suffix, and an overwrite for a managed role is reported instead of emitted
+  as a reference to a role the blueprint never defines. Both warn.
+- The tool catalog is corrected throughout. 46 rows named parameters that do
+  not exist, several sections described pagination, envelope fields, and
+  blueprint contents that do not match the code, and two capability claims
+  are now true. A smoke assertion holds the catalog and `docs/toolsets.md` to
+  the code's `core` set so they cannot drift again.
+
 ## 1.3.0 (2026-08-11)
 
 Adds toolsets, so a session can load only the tools it needs, and ships the
