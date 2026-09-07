@@ -664,6 +664,58 @@ check(loungeChan?.type === "voice", "export keeps voice type");
 check(exported.warnings.some((w) => w.includes("weird")), "inexpressible channel type warns and skips");
 check(exported.warnings.some((w) => w.includes("manual-ow")), "foreign member overwrite warns");
 
+// Export must produce a blueprint its own planner accepts. Two real-server
+// shapes used to break that: Discord permits duplicate role names where a
+// blueprint cannot, and an overwrite for an integration-managed role used to
+// name a role the blueprint never defines.
+const { buildPlan: planFromExport } = await import("../dist/builder/planner.js");
+const emptyTarget = {
+  channels: [],
+  roles: [{ id: XG, name: "@everyone", permissions: "0", position: 0 }],
+  guildFeatures: [],
+  botPermissions: (1n << 62n) - 1n,
+};
+
+const dupRoles = [
+  { id: XG, name: "@everyone", permissions: "0", position: 0 },
+  { id: "d1", name: "Blue", permissions: "0", position: 1 },
+  { id: "d2", name: "Blue", permissions: "0", position: 2 },
+  { id: "d3", name: "blue", permissions: "0", position: 3 },
+];
+const dupExport = exportBlueprint([], dupRoles, XG, {});
+const dupNames = (dupExport.blueprint.roles ?? []).map((r) => r.name);
+check(new Set(dupNames.map((n) => n.toLowerCase())).size === dupNames.length, "export renames duplicate role names apart");
+check(dupNames[0] === "Blue", "the highest duplicate keeps the original name");
+check(dupExport.warnings.some((w) => w.includes("More than one role is named")), "a renamed duplicate is reported, not silent");
+check(planFromExport(dupExport.blueprint, emptyTarget).errors.length === 0, "a duplicate-name export still plans cleanly");
+
+const managedRoles = [
+  { id: XG, name: "@everyone", permissions: "0", position: 0 },
+  { id: "m1", name: "Members", permissions: "0", position: 1 },
+  { id: "m2", name: "MusicBot", permissions: "0", position: 2, managed: true },
+];
+const managedExport = exportBlueprint(
+  [{ id: "mc1", name: "private", type: 0, position: 0, permission_overwrites: [
+    { id: XG, type: 0, allow: "0", deny: VIEW_ONLY },
+    { id: "m1", type: 0, allow: VIEW_ONLY, deny: "0" },
+    { id: "m2", type: 0, allow: VIEW_ONLY, deny: "0" },
+  ] }],
+  managedRoles, XG, {}
+);
+const managedChan = (managedExport.blueprint.channels ?? [])[0];
+check(!(managedChan.private_to ?? []).includes("MusicBot"), "an integration role is not named in private_to");
+check(setLikeEquals(managedChan.private_to, ["Members"]), "the real role is still captured");
+check(managedExport.warnings.some((w) => w.includes("private")), "the dropped integration overwrite warns");
+check(planFromExport(managedExport.blueprint, emptyTarget).errors.length === 0, "an export with an integration overwrite still plans cleanly");
+
+const longName = "R".repeat(100);
+const longExport = exportBlueprint([], [
+  { id: XG, name: "@everyone", permissions: "0", position: 0 },
+  { id: "L1", name: longName, permissions: "0", position: 1 },
+  { id: "L2", name: longName, permissions: "0", position: 2 },
+], XG, {});
+check((longExport.blueprint.roles ?? []).every((r) => r.name.length <= 100), "a renamed duplicate stays within Discord's 100 character role name limit");
+
 function setLikeEquals(a, b) {
   if (!a || a.length !== b.length) return false;
   const lower = new Set(a.map((x) => x.toLowerCase()));

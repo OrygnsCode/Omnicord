@@ -12,6 +12,9 @@ import type { Blueprint, BlueprintChannel } from "./blueprint.js";
 
 const P = PermissionFlagsBits;
 
+// Discord's own limit on a role name.
+const ROLE_NAME_MAX = 100;
+
 const SEND_FAMILY =
   P.SendMessages |
   P.SendMessagesInThreads |
@@ -104,31 +107,59 @@ export function exportBlueprint(
   options: { botUserId?: string; name?: string } = {}
 ): { blueprint: Blueprint; warnings: string[] } {
   const warnings: string[] = [];
-  const roleNames = new Map(
-    roles.filter((r) => r.name).map((r) => [r.id, r.name as string])
-  );
 
-  // Roles: everything except @everyone and integration-managed ones,
-  // bottom of the hierarchy first so a rebuild stacks them the same way.
-  const exportedRoles = roles
+  // Roles the blueprint will actually define: everything except @everyone
+  // and integration-managed ones, bottom of the hierarchy first so a
+  // rebuild stacks them the same way.
+  const exportable = roles
     .filter((r) => r.id !== guildId && !r.managed)
-    .sort((a, b) => a.position - b.position)
-    .map((r) => {
-      const extra = r as RoleLite & {
-        color?: number;
-        hoist?: boolean;
-        mentionable?: boolean;
-      };
-      return {
-        name: r.name ?? "unnamed",
-        permissions: describePermissions(BigInt(r.permissions)),
-        ...(extra.color
-          ? { color: `#${extra.color.toString(16).padStart(6, "0")}` }
-          : {}),
-        ...(extra.hoist ? { hoist: true } : {}),
-        ...(extra.mentionable ? { mentionable: true } : {}),
-      };
-    });
+    .sort((a, b) => a.position - b.position);
+
+  // Discord lets two roles share a name. A blueprint cannot, because every
+  // reference in private_to and posting_roles is by name, so a duplicate is
+  // both unbuildable and ambiguous. Later collisions get a numeric suffix,
+  // reported rather than applied silently.
+  const roleNames = new Map<string, string>();
+  const taken = new Set<string>();
+  for (const r of exportable) {
+    const base = r.name ?? "unnamed";
+    let candidate = base;
+    let n = 2;
+    while (taken.has(candidate.toLowerCase())) {
+      const suffix = ` ${n}`;
+      candidate = base.slice(0, ROLE_NAME_MAX - suffix.length) + suffix;
+      n += 1;
+    }
+    if (candidate !== base) {
+      warnings.push(
+        `More than one role is named "${base}"; exported the lower one as ` +
+          `"${candidate}" so channel permissions can tell them apart.`
+      );
+    }
+    taken.add(candidate.toLowerCase());
+    roleNames.set(r.id, candidate);
+  }
+
+  // Only exported roles are resolvable by name. An overwrite for @everyone
+  // is handled separately, and one for a managed role now falls through to
+  // the leftovers warning instead of producing a private_to entry naming a
+  // role the blueprint never defines.
+  const exportedRoles = exportable.map((r) => {
+    const extra = r as RoleLite & {
+      color?: number;
+      hoist?: boolean;
+      mentionable?: boolean;
+    };
+    return {
+      name: roleNames.get(r.id) as string,
+      permissions: describePermissions(BigInt(r.permissions)),
+      ...(extra.color
+        ? { color: `#${extra.color.toString(16).padStart(6, "0")}` }
+        : {}),
+      ...(extra.hoist ? { hoist: true } : {}),
+      ...(extra.mentionable ? { mentionable: true } : {}),
+    };
+  });
 
   const byPosition = (a: GuildChannelLite, b: GuildChannelLite) =>
     (a.position ?? 0) - (b.position ?? 0);
