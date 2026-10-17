@@ -21,6 +21,14 @@ updates:
         update-types:
           - minor
           - patch
+    ignore:
+      # Type definitions stay on the newest Node major that CI actually runs.
+      # Types ahead of the tested runtimes let the compiler accept APIs that
+      # exist on no supported Node, which turns a clean type check into a
+      # crash for users. This moves with the CI matrix, by hand.
+      - dependency-name: '@types/node'
+        update-types:
+          - version-update:semver-major
     labels:
       - dependencies
 
