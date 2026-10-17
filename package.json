@@ -46,18 +46,18 @@
   "dependencies": {
     "@discordjs/rest": "^2.6.1",
     "@discordjs/ws": "^2.0.4",
-    "@modelcontextprotocol/sdk": "^1.29.0",
-    "discord-api-types": "^0.38.48",
+    "@modelcontextprotocol/sdk": "^1.32.1",
+    "discord-api-types": "^0.38.56",
     "dotenv": "^17.2.1",
-    "zod": "^4.4.3"
+    "zod": "^4.6.7"
   },
   "devDependencies": {
-    "@types/node": "^24.0.0",
-    "tsx": "^4.20.0",
+    "@types/node": "^24.19.2",
+    "tsx": "^4.23.15",
     "typescript": "^7.0.2"
   },
   "overrides": {
-    "undici": "^6.27.0"
+    "undici": "^6.29.1"
   },
   "mcpName": "io.github.OrygnsCode/omnicord"
 }
