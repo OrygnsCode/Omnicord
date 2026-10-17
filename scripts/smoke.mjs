@@ -6,7 +6,7 @@
 // Run with: npm run smoke
 
 import { spawn } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { tmpdir } from "node:os";
@@ -297,6 +297,71 @@ try {
   });
   assert(wizardCode === 0, "init wizard exits cleanly on q");
   assert(wizardOut.includes("cancelled"), "init wizard announces cancellation");
+
+  // Re-registering from an existing setup rewrites only the client entry,
+  // without redoing the bot setup. It is the repair for a client pointing at
+  // a copy that no longer exists, so it has to work offline and without a
+  // valid token. Sandboxed: the config home and every profile folder point
+  // into a temp dir, so no real client config can be found or written, and
+  // the snippet is printed rather than written anywhere.
+  const sandbox = mkdtempSync(join(tmpdir(), "omnicord-repair-"));
+  const omniHome = join(sandbox, "omnihome");
+  mkdirSync(omniHome, { recursive: true });
+  writeFileSync(join(omniHome, ".env"), "DISCORD_TOKEN=placeholder.not.a.token\n");
+  const repairEnv = {
+    ...env,
+    OMNICORD_HOME: omniHome,
+    HOME: sandbox,
+    USERPROFILE: sandbox,
+    APPDATA: join(sandbox, "roaming"),
+    LOCALAPPDATA: join(sandbox, "local"),
+  };
+  const repair = (await import("node:child_process")).spawn(
+    process.execPath,
+    [entry, "init"],
+    { cwd: sandbox, env: repairEnv, stdio: ["pipe", "pipe", "pipe"] }
+  );
+  let repairOut = "";
+  let pickedRepair = false;
+  let pickedPrint = false;
+  repair.stdout.on("data", (d) => {
+    repairOut += d.toString();
+    const plain = repairOut.replace(/\x1b\[[0-9;]*m/g, "");
+    if (!pickedRepair && plain.includes("Choose 1-4")) {
+      pickedRepair = true;
+      repair.stdin.write("2\n");
+    }
+    // The print option's number depends on which clients exist, so read it
+    // off the menu instead of assuming it.
+    const printOption = plain.match(/(\d+)\. Just print the config snippet/);
+    if (!pickedPrint && printOption) {
+      pickedPrint = true;
+      repair.stdin.write(`${printOption[1]}\n`);
+    }
+  });
+  // On a hang, kill and then wait for the real exit: Windows will not delete
+  // a folder that a still-dying process has as its working directory.
+  const repairCode = await new Promise((resolve) => {
+    const timer = setTimeout(() => repair.kill(), 8000);
+    repair.on("exit", (code) => {
+      clearTimeout(timer);
+      resolve(code);
+    });
+  });
+  try {
+    rmSync(sandbox, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
+  } catch {
+    // A leftover temp folder must not mask the result being checked.
+  }
+  const repairPlain = repairOut.replace(/\x1b\[[0-9;]*m/g, "");
+  assert(repairPlain.includes("Re-register with your AI client"), "an existing setup offers to re-register");
+  assert(repairCode === 0 && pickedPrint, "re-registering reaches the client choice and exits cleanly");
+  const argsMatch = repairPlain.match(/"args": \[\s*"((?:[^"\\]|\\.)*)"/);
+  assert(
+    argsMatch !== null && JSON.parse(`"${argsMatch[1]}"`) === entry,
+    "re-registering prints an entry pointing at this copy"
+  );
+  assert(repairPlain.includes("Two steps left"), "re-registering ends with the restart steps");
 
   console.log("smoke: all assertions passed");
   child.kill();

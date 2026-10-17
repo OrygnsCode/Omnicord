@@ -1416,6 +1416,100 @@ const bigCategory = { categories: [{ name: "big", channels: Array.from({ length:
 check(!blueprintSchema.safeParse(bigCategory).success, "51 channels in one category is still rejected");
 }
 
+// Install location: recognizing a copy running out of npm's npx cache, and
+// copying it somewhere npm will not delete.
+
+{
+const { inNpxCache, launchedByNpx, npxCacheWarning, installedNodeModules, copyToStableHome } =
+  await import("../dist/install.js");
+const fs = await import("node:fs");
+const os = await import("node:os");
+const path = await import("node:path");
+const { spawnSync } = await import("node:child_process");
+
+// Both separators, wherever the check runs, since a Windows path can reach
+// a test on Linux and the other way round.
+const winNpx = "C:\\Users\\a\\AppData\\Local\\npm-cache\\_npx\\b021ee2d0532b23e\\node_modules\\@orygn\\omnicord";
+const posixNpx = "/home/a/.npm/_npx/b021ee2d0532b23e/node_modules/@orygn/omnicord";
+check(inNpxCache(winNpx), "a Windows npx cache path is recognized");
+check(inNpxCache(posixNpx), "a POSIX npx cache path is recognized");
+check(!inNpxCache("C:\\Users\\a\\AppData\\Roaming\\npm\\node_modules\\@orygn\\omnicord"), "a Windows global install is not the npx cache");
+check(!inNpxCache("/usr/local/lib/node_modules/@orygn/omnicord"), "a POSIX global install is not the npx cache");
+check(!inNpxCache("/home/a/code/Omnicord"), "a source checkout is not the npx cache");
+check(!inNpxCache("/home/a/.omnicord/app/1.4.1/node_modules/@orygn/omnicord"), "the stable copy is not the npx cache");
+check(!inNpxCache("/home/a/my_npx_tools/node_modules/@orygn/omnicord"), "a folder merely containing _npx does not count");
+
+check(launchedByNpx({ npm_command: "exec" }), "npm_command=exec means npx started the process");
+check(!launchedByNpx({}), "no npm_command means npx did not start it");
+check(!launchedByNpx({ npm_command: "run-script" }), "npm run is not npx");
+
+const warning = npxCacheWarning(posixNpx, {});
+check(typeof warning === "string" && warning.includes(posixNpx), "the warning names the cached path");
+check(warning?.includes("npx @orygn/omnicord@latest init"), "the warning names the command that fixes it");
+check(warning?.includes("Server disconnected"), "the warning names the symptom people see");
+check(npxCacheWarning(posixNpx, { npm_command: "exec" }) === undefined, "no warning when npx itself launched the server");
+check(npxCacheWarning("/usr/local/lib/node_modules/@orygn/omnicord", {}) === undefined, "no warning for a global install");
+
+// Native paths here, since this walks real path segments.
+const nmRoot = path.join(os.tmpdir(), "x", "node_modules");
+check(installedNodeModules(path.join(nmRoot, "@orygn", "omnicord")) === nmRoot, "a scoped package finds its node_modules");
+check(installedNodeModules(path.join(nmRoot, "omnicord")) === nmRoot, "an unscoped package finds its node_modules");
+check(installedNodeModules(path.join(os.tmpdir(), "code", "Omnicord")) === undefined, "a source checkout has no node_modules above it");
+
+// A real copy out of a fake npx layout. The entry imports a dependency that
+// npm would have hoisted beside the package, so running the copied entry
+// proves resolution works from the new location, not just that files moved.
+const sandbox = fs.mkdtempSync(path.join(os.tmpdir(), "omnicord-install-"));
+try {
+  const nm = path.join(sandbox, "npm-cache", "_npx", "abc123", "node_modules");
+  const pkg = path.join(nm, "@orygn", "omnicord");
+  fs.mkdirSync(path.join(pkg, "dist"), { recursive: true });
+  fs.writeFileSync(path.join(pkg, "package.json"), JSON.stringify({ name: "@orygn/omnicord", version: "9.9.9", type: "module" }));
+  fs.writeFileSync(path.join(pkg, "dist", "index.js"), 'import dep from "dep-a";\nconsole.log(dep);\n');
+  fs.mkdirSync(path.join(nm, "dep-a"), { recursive: true });
+  fs.writeFileSync(path.join(nm, "dep-a", "package.json"), JSON.stringify({ name: "dep-a", main: "index.js" }));
+  fs.writeFileSync(path.join(nm, "dep-a", "index.js"), 'module.exports = "dep-a resolved";\n');
+  fs.mkdirSync(path.join(nm, ".bin"), { recursive: true });
+  fs.writeFileSync(path.join(nm, ".bin", "omnicord"), "shim pointing into the cache\n");
+
+  const home = path.join(sandbox, "home");
+  const first = copyToStableHome(pkg, home, "9.9.9");
+  const target = path.join(home, "app", "9.9.9");
+  check(first.copied === true, "the first copy reports that it copied");
+  check(first.entry === path.join(target, "node_modules", "@orygn", "omnicord", "dist", "index.js"), "the entry lands under <home>/app/<version>");
+  check(fs.existsSync(first.entry), "the copied entry exists");
+  check(!inNpxCache(first.entry), "the copied entry is outside the npx cache");
+  check(fs.existsSync(path.join(target, "node_modules", "dep-a", "index.js")), "hoisted dependencies come along");
+  check(!fs.existsSync(path.join(target, "node_modules", ".bin")), "launcher shims pointing into the cache are left behind");
+  check(fs.readdirSync(path.join(home, "app")).every((n) => !n.includes(".partial")), "no staging folder is left after a copy");
+
+  const ran = spawnSync(process.execPath, [first.entry], { encoding: "utf8" });
+  check(ran.status === 0 && ran.stdout.trim() === "dep-a resolved", "the copied entry runs and resolves its dependency");
+
+  const second = copyToStableHome(pkg, home, "9.9.9");
+  check(second.copied === false && second.entry === first.entry, "copying the same version again reuses it");
+
+  // An interrupted earlier run can leave a folder with no entry in it.
+  const broken = path.join(home, "app", "8.8.8");
+  fs.mkdirSync(broken, { recursive: true });
+  fs.writeFileSync(path.join(broken, "leftover.txt"), "half a copy");
+  const repaired = copyToStableHome(pkg, home, "8.8.8");
+  check(repaired.copied === true && fs.existsSync(repaired.entry), "an incomplete version folder is replaced by a full copy");
+  check(!fs.existsSync(path.join(broken, "leftover.txt")), "the incomplete leftover is gone");
+
+  let threw = false;
+  try {
+    copyToStableHome(path.join(sandbox, "code", "Omnicord"), home, "7.7.7");
+  } catch {
+    threw = true;
+  }
+  check(threw, "copying a source checkout is refused");
+  check(!fs.existsSync(path.join(home, "app", "7.7.7")), "a refused copy leaves nothing behind");
+} finally {
+  fs.rmSync(sandbox, { recursive: true, force: true });
+}
+}
+
 if (failures > 0) {
   console.error(`\nunit: ${failures} failure(s)`);
   process.exit(1);

@@ -3,6 +3,8 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { loadConfig, VERSION } from "./config.js";
 import { buildServer } from "./server.js";
 import { startHttpServer } from "./http.js";
+import { PACKAGE_ROOT } from "./home.js";
+import { npxCacheWarning } from "./install.js";
 
 // Entry point. Two transports:
 //
@@ -56,6 +58,12 @@ if (config.toolsets.unknown.length > 0) {
 }
 
 const { http, port, host } = parseArgs(process.argv);
+
+// A client config naming a file inside npm's npx cache works until npm
+// clears that folder, and then fails on every start with nothing on screen
+// to explain it. Say so while it still runs. See install.ts.
+const npxWarning = npxCacheWarning(PACKAGE_ROOT, process.env);
+if (npxWarning) console.error(npxWarning);
 
 // The gateway connects in the background: presence goes online and event
 // subscriptions start flowing, while the transports come up immediately.

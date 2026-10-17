@@ -4,6 +4,39 @@ All notable changes to Omnicord are recorded here. The format follows
 Keep a Changelog, and the project follows semantic versioning. Version
 1.0.0 marked the public launch; releases since follow semver.
 
+## Unreleased
+
+### Fixed
+
+- **Installs set up through npx stopped working whenever npm's npx cache was
+  cleared.** `npx @orygn/omnicord init` registered the copy npx was running
+  from, inside that cache, with the AI client. When the folder went away the
+  client failed on every start with "Cannot find module", which Claude
+  Desktop shows as "Server disconnected", and until then the client never
+  received updates, because nothing changed that folder. The wizard now
+  copies Omnicord to `.omnicord/app/<version>` in the user folder and
+  registers the copy. Each version gets its own folder, so a client still
+  pointing at an older one keeps working; that costs about 40 MB per version,
+  the full dependency tree, until old ones are deleted by hand.
+
+### Added
+
+- `init` on an existing setup offers **Re-register with your AI client**,
+  which rewrites only the client entry and keeps the bots. It is the repair
+  for an install already broken by the above, and the way to update:
+  `npx @orygn/omnicord@latest init`, then re-register. The repair used to
+  require reconfiguring from scratch.
+- A server running from the npx cache without npx having launched it, which
+  is the setup that breaks, warns on startup and adds an `install_location`
+  warning to `run_setup_check`. Clients configured to launch through
+  `npx -y @orygn/omnicord` are unaffected and get no warning, since npx
+  reinstalls on demand.
+
+### Changed
+
+- The troubleshooting entry for this blamed `npm cache clean`, which does not
+  touch the npx cache. It now names the symptom and the actual causes.
+
 ## 1.4.0 (2026-09-07)
 
 Rich message layouts, private channels in one call, and a fix to how

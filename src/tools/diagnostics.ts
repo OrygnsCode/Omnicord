@@ -13,6 +13,8 @@ import { enterBot, botParam, ToolProblem } from "./common.js";
 
 import { readIntents } from "../discord/intents.js";
 import { getGatewayState } from "../discord/gateway.js";
+import { PACKAGE_ROOT } from "../home.js";
+import { npxCacheWarning } from "../install.js";
 import { rateLimitStats } from "../discord/rateLimit.js";
 
 interface SetupCheck {
@@ -141,7 +143,8 @@ export function registerDiagnostics(
       description:
         "End-to-end health check of the Omnicord setup: token presence and " +
         "validity, privileged gateway intent toggles, guild count against " +
-        "Discord's verification thresholds, and default guild membership. " +
+        "Discord's verification thresholds, default guild membership, and " +
+        "whether this install runs from npm's temporary npx cache. " +
         "Every failed check comes with instructions for fixing it. With more " +
         "than one bot configured, pass bot to check a specific one. Run this " +
         "first when anything misbehaves.",
@@ -150,6 +153,24 @@ export function registerDiagnostics(
     },
     async ({ bot: botArg }) => {
       const checks: SetupCheck[] = [];
+
+      // Check 0: where this copy runs from. First, because it has nothing to
+      // do with the token and check 1 returns early when the token is
+      // missing. Only reported when there is something wrong, so a healthy
+      // install's pass count does not change.
+      if (npxCacheWarning(PACKAGE_ROOT, process.env)) {
+        checks.push({
+          check: "install_location",
+          status: "warn",
+          detail:
+            `Running from npm's npx cache (${PACKAGE_ROOT}), which npm does ` +
+            "not keep. When it is cleared, the AI client fails to start " +
+            'Omnicord and shows "Server disconnected".',
+          fix:
+            "Run `npx @orygn/omnicord@latest init`, choose \"Re-register " +
+            'with your AI client", then fully restart the client.',
+        });
+      }
 
       // Check 1: a bot is configured.
       if (config.bots.length === 0) {

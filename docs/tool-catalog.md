@@ -435,7 +435,7 @@ Real-time gateway events surfaced through MCP. No notable competitor ships this.
 
 | Tool | D | Requires | Key parameters | Summary |
 |---|---|---|---|---|
-| run_setup_check | no | none | bot (optional) | End-to-end health check: token presence and validity, the three privileged intents (enabled in the portal versus needed), guild count against the verification gate, gateway connection, and default-guild membership. Pass bot to check a specific bot when several are configured. Output is a plain-English pass or fix list. Run on first connect and whenever things act weird. |
+| run_setup_check | no | none | bot (optional) | End-to-end health check: token presence and validity, the three privileged intents (enabled in the portal versus needed), guild count against the verification gate, gateway connection, and default-guild membership, plus an `install_location` warning when the client points into npm's npx cache, which breaks once that cache is cleared. Pass bot to check a specific bot when several are configured. Output is a plain-English pass or fix list. Run on first connect and whenever things act weird. |
 | explain_permissions | no | none | actor (bot or member), permission, guild, channel | Answers "can X do Y in Z, and if not, why not" by resolving the full permission chain. The preflight engine, exposed. |
 | get_rate_limit_status | no | none | (none) | Current bucket states, queue depth, and invalid-request counter. |
 | find | no | none | query, types[] (channel, role, member, emoji, thread, event), guild | The fuzzy resolver as a tool. Returns ranked candidates with IDs and context so the caller can disambiguate once and reuse the ID. |

@@ -70,6 +70,9 @@ you find out immediately if something is wrong rather than later:
    detected automatically, even before you have configured MCP in them. If
    a config file is not valid JSON, the wizard leaves it untouched and
    prints a snippet to paste instead. Anything else also gets a snippet.
+   Run through npx, it first copies Omnicord to `.omnicord/app/<version>`
+   in your user folder and registers that copy, because the folder npx
+   runs it from is a cache npm does not keep.
 
 After the wizard finishes, fully restart your AI client (quit from the
 system tray, not just the window). Then in a new conversation, ask it to
@@ -77,8 +80,14 @@ system tray, not just the window). Then in a new conversation, ask it to
 passing.
 
 To add another bot later, or to change your setup, run `init` again. It
-detects your existing configuration and offers to add a bot, reconfigure
-from scratch, or quit.
+detects your existing configuration and offers to add a bot, re-register
+with your AI client, reconfigure from scratch, or quit.
+
+To update, run `npx @orygn/omnicord@latest init` and choose to re-register.
+The new version is copied alongside the old one and your client is pointed
+at it; your bots and settings are left as they are. Older versions stay in
+`.omnicord/app` until you delete them, which is safe once no client config
+points at them.
 
 ## Manual setup
 

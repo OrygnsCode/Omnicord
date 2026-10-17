@@ -98,20 +98,29 @@ several minutes. The preview count is not limited, so you can always check
 how many members would be removed; the execution simply needs to wait a few
 minutes between runs.
 
-## Tools broke after cleaning the npm cache
+## "Server disconnected" after it used to work
 
-If Omnicord was installed with npx, the program itself lives in npm's
-cache folder, and `npm cache clean --force` deletes it. Your token and
-saved data are safe: they live in `.omnicord` in your user folder, which
-a cache clean does not touch. To repair, run the same install command
-again:
+If Omnicord was set up with `npx @orygn/omnicord init` on version 1.4.0 or
+earlier, your AI client was pointed at a copy inside npm's npx cache. That
+folder is not permanent: `npm cache npx rm` empties it, and so does deleting
+the npm cache folder or running a disk cleanup tool. (`npm cache clean` does
+not; it leaves the npx cache alone.) Once the folder is gone, the client
+cannot start Omnicord. Claude Desktop shows "Server disconnected", and its
+log for the server, `mcp-server-omnicord.log`, shows `Cannot find module`
+with a path containing `_npx`.
+
+Your token and saved data are safe. They live in `.omnicord` in your user
+folder, which none of this touches. To repair, run:
 
 ```
-npx @orygn/omnicord init
+npx @orygn/omnicord@latest init
 ```
 
-The wizard re-registers the fresh copy with your AI client. Then fully
-restart the client.
+choose **Re-register with your AI client**, and fully restart the client.
+The wizard now copies Omnicord to `.omnicord/app/<version>` before
+registering it, so this does not recur. A setup that still works but points
+into the npx cache gets an `install_location` warning from the setup check,
+so you can fix it before it breaks.
 
 ## The HTTP server refuses to start
 

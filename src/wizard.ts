@@ -10,7 +10,8 @@ import { dirname, join } from "node:path";
 import { createRequire } from "node:module";
 import { homedir } from "node:os";
 import { VERSION } from "./config.js";
-import { envFilePath, botsFilePath, IS_INSTALLED } from "./home.js";
+import { envFilePath, botsFilePath, configDir, IS_INSTALLED } from "./home.js";
+import { copyToStableHome, inNpxCache } from "./install.js";
 import { bold, cyan, dim, green, red, rule, underline, yellow } from "./term.js";
 import { readIntents, type IntentStatus } from "./discord/intents.js";
 import {
@@ -207,15 +208,23 @@ export async function runWizard(): Promise<void> {
       );
       console.log("  What would you like to do?");
       console.log(`    ${bold("1")}. Add another bot ${dim("(for a different server)")}`);
-      console.log(`    ${bold("2")}. Reconfigure from scratch`);
-      console.log(`    ${bold("3")}. Quit`);
-      const choice = await ask(`  Choose 1-3 ${dim("[1]")}: `);
-      if (choice === "3") throw new Cancelled();
-      if (choice !== "2") {
+      console.log(`    ${bold("2")}. Re-register with your AI client ${dim('(repairs "Server disconnected")')}`);
+      console.log(`    ${bold("3")}. Reconfigure from scratch`);
+      console.log(`    ${bold("4")}. Quit`);
+      const choice = await ask(`  Choose 1-4 ${dim("[1]")}: `);
+      if (choice === "4") throw new Cancelled();
+      // Re-registering keeps the bots and only rewrites the client entry,
+      // which is the whole repair for a client pointing at a copy that no
+      // longer exists. Without it, that repair meant redoing the setup.
+      if (choice === "2") {
+        if (await registerClient()) printRestartSteps();
+        return;
+      }
+      if (choice !== "3") {
         await runAddBot(cfg);
         return;
       }
-      // choice 2 falls through to a fresh setup that supersedes the old config.
+      // choice 3 falls through to a fresh setup that supersedes the old config.
     }
 
     await runFreshSetup(cfg);
@@ -373,7 +382,36 @@ async function pickDefaultServer(token: string): Promise<string> {
 // Register the omnicord server in a client config once, regardless of how many
 // bots were set up. Unchanged behavior: adds only the omnicord entry, backs the
 // file up first, and never clobbers invalid JSON.
-async function registerClient(): Promise<void> {
+// The entry file to register. Run through npx, the wizard is running out of
+// npm's npx cache, which npm can clear at any time, so the package is copied
+// somewhere permanent first (see install.ts). Returns undefined when that
+// copy fails, after saying why: registering the cached path instead would
+// only postpone the failure to some later day.
+function durableEntryPath(): string | undefined {
+  if (!inNpxCache(packageRoot)) return join(packageRoot, "dist", "index.js");
+  const home = configDir();
+  console.log(dim("\n  npx runs Omnicord from a cache folder that npm does not keep, so"));
+  console.log(dim(`  it is being copied to ${join(home, "app", VERSION)} first.`));
+  try {
+    const copy = copyToStableHome(packageRoot, home, VERSION);
+    console.log(dim(copy.copied ? "  Copied." : "  That version is already there; reusing it."));
+    return copy.entry;
+  } catch (err) {
+    const reason = err instanceof Error ? err.message : String(err);
+    console.log(red(`  Could not copy Omnicord out of the npx cache: ${reason}`));
+    console.log("  Nothing was registered, because the cached copy would stop working");
+    console.log("  as soon as npm clears it. Install Omnicord permanently instead:");
+    console.log(`  ${cyan("npm install -g @orygn/omnicord")}, then ${cyan("omnicord init")} and choose to re-register.`);
+    return undefined;
+  }
+}
+
+// Returns false when nothing could be registered; the reason is already on
+// screen by then.
+async function registerClient(): Promise<boolean> {
+  const entryPath = durableEntryPath();
+  if (!entryPath) return false;
+
   const candidates = clientConfigCandidates({
     platform: process.platform,
     homedir: homedir(),
@@ -397,7 +435,7 @@ async function registerClient(): Promise<void> {
     `    ${bold(String(present.length + 1))}. Just print the config snippet (paste it yourself)`
   );
 
-  const entry = { command: "node", args: [join(packageRoot, "dist", "index.js")] };
+  const entry = { command: "node", args: [entryPath] };
 
   const detected = present.findIndex((c) => c.exists || c.appPresent);
   const defaultChoice = detected >= 0 ? detected + 1 : present.length + 1;
@@ -438,6 +476,7 @@ async function registerClient(): Promise<void> {
     console.log("\n  Add this to your client's MCP config:\n");
     console.log(JSON.stringify({ mcpServers: { omnicord: entry } }, null, 2));
   }
+  return true;
 }
 
 function printRestartSteps(): void {
@@ -522,15 +561,15 @@ async function runFreshSetup(cfg: ExistingConfig): Promise<void> {
     const defaultGuild = await pickDefaultServer(bot.token);
     console.log(`\n${bold(cyan("Save configuration"))}`);
     writeEnvSingle(cfg, bot.token, defaultGuild);
-    await registerClient();
-    console.log(`\n${bold(green("Setup complete."))}`);
+    const registered = await registerClient();
+    console.log(`\n${bold(green(registered ? "Setup complete." : "Bot saved."))}`);
     console.log(`  Bot: ${bold(bot.app.botUsername)} (app: ${bot.app.name})`);
     console.log(
       defaultGuild
         ? `  Default server: ${defaultGuild}`
         : "  Default server: none (pass guild per tool call or re-run init)"
     );
-    printRestartSteps();
+    if (registered) printRestartSteps();
     return;
   }
 
@@ -546,11 +585,11 @@ async function runFreshSetup(cfg: ExistingConfig): Promise<void> {
   }
   console.log(`\n${bold(cyan("Save configuration"))}`);
   writeBotsMulti(cfg, bots);
-  await registerClient();
-  console.log(`\n${bold(green("Setup complete."))}`);
+  const registered = await registerClient();
+  console.log(`\n${bold(green(registered ? "Setup complete." : "Bots saved."))}`);
   console.log(`  ${bots.length} bots configured:`);
   printBotList(parseBotsFile(serializeBotsFile(bots)));
-  printRestartSteps();
+  if (registered) printRestartSteps();
 }
 
 // Add one bot to an existing setup. The client is already registered, so this

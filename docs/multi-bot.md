@@ -29,8 +29,9 @@ privileged intents, asks for a short name to tell the bots apart, and gives
 you an invite link for that bot's server.
 
 If you already have a bot configured, `init` instead offers to add another
-bot, reconfigure from scratch, or quit. Adding a bot keeps your existing one
-and appends the new one, so you can grow into multiple bots one at a time.
+bot, re-register with your AI client, reconfigure from scratch, or quit.
+Adding a bot keeps your existing one and appends the new one, so you can
+grow into multiple bots one at a time.
 
 ### By hand
 
