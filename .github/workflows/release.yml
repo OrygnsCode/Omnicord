@@ -1,6 +1,6 @@
 # Publishes a tagged release to npm through GitHub's OIDC trusted publisher,
-# so no npm token exists anywhere: not in repository secrets, not on a
-# laptop. npm exchanges the job's identity token for a short-lived publish
+# then to the official MCP registry the same way, so no token exists
+# anywhere: not in repository secrets, not on a laptop. npm exchanges the job's identity token for a short-lived publish
 # credential and attaches a provenance attestation. The package's settings
 # on npmjs.com name this repository, this workflow file, and the `npm`
 # environment as the only identity allowed to do that, and all three must
@@ -61,14 +61,24 @@ jobs:
       - name: Use an npm that can do the OIDC exchange
         run: npm install -g npm@^11
 
-      - name: Refuse a tag that does not match package.json
+      # Every place the version is written must agree with the tag before
+      # anything is published. A mismatch caught later, after npm accepted
+      # the package, leaves a release half done.
+      - name: Refuse a tag that does not match every version string
         run: |
           TAG="${{ github.event.inputs.tag || github.ref_name }}"
-          PKG="v$(node -p "require('./package.json').version")"
-          if [ "$TAG" != "$PKG" ]; then
-            echo "Tag $TAG does not match package.json version $PKG."
-            exit 1
-          fi
+          WANT="${TAG#v}"
+          for pair in \
+            "package.json:$(node -p "require('./package.json').version")" \
+            "server.json:$(node -p "require('./server.json').version")" \
+            "server.json packages[0]:$(node -p "require('./server.json').packages[0].version")" \
+            "mcpb/manifest.json:$(node -p "require('./mcpb/manifest.json').version")"; do
+            if [ "${pair##*:}" != "$WANT" ]; then
+              echo "Tag $TAG does not match ${pair%:*} (${pair##*:})."
+              exit 1
+            fi
+          done
+          echo "All version strings are $WANT."
 
       - name: Install dependencies
         run: npm ci
@@ -78,3 +88,46 @@ jobs:
       # gated by the same tests as a commit, on the exact tagged source.
       - name: Publish
         run: npm publish --access public
+
+  # The official MCP registry, authenticated the same tokenless way: the
+  # registry accepts this repository's GitHub identity for the
+  # io.github.OrygnsCode namespace. It validates server.json against the
+  # npm package, so it runs after npm and waits until npm serves the new
+  # version.
+  publish-registry:
+    name: Publish to the MCP registry
+    runs-on: ubuntu-latest
+    needs: publish-npm
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.inputs.tag || github.ref }}
+
+      # Pinned to the version proven on earlier releases rather than
+      # "latest", so a publisher release cannot change behavior mid-release.
+      - name: Install mcp-publisher
+        run: |
+          curl -fsSL "https://github.com/modelcontextprotocol/registry/releases/download/v1.8.1/mcp-publisher_linux_amd64.tar.gz" | tar xz mcp-publisher
+          ./mcp-publisher --version
+
+      - name: Wait until npm serves this version
+        run: |
+          VERSION="$(jq -r .version server.json)"
+          for attempt in $(seq 1 30); do
+            if npm view "@orygn/omnicord@$VERSION" version > /dev/null 2>&1; then
+              echo "npm serves $VERSION."
+              exit 0
+            fi
+            sleep 10
+          done
+          echo "npm did not serve $VERSION within five minutes."
+          exit 1
+
+      - name: Log in with this workflow's identity
+        run: ./mcp-publisher login github-oidc
+
+      - name: Publish server.json
+        run: ./mcp-publisher publish
