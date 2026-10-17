@@ -83,11 +83,63 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      # prepublishOnly runs the full local suite (build, unit, stdio and
-      # HTTP smoke) before the tarball leaves the runner, so a publish is
-      # gated by the same tests as a commit, on the exact tagged source.
+      # The full local suite (build, unit, stdio and HTTP smoke) on the exact
+      # tagged source, as its own step so the publish log below shows only
+      # the publish. It is what prepublishOnly would run.
+      - name: Test
+        run: npm test
+
+      # npm reports a refused trusted-publisher exchange only at verbose log
+      # level, then falls back to setup-node's placeholder token, so any
+      # mismatch with the npmjs.com configuration surfaces as a bare 404 on
+      # the publish. This makes the same exchange first and stops with npm's
+      # actual answer, next to the identity claims it was matched against.
+      # No token of any kind is printed.
+      - name: Check that npm accepts this job as a trusted publisher
+        run: |
+          node --input-type=module <<'EOF'
+          const { ACTIONS_ID_TOKEN_REQUEST_URL: url, ACTIONS_ID_TOKEN_REQUEST_TOKEN: bearer } = process.env;
+          if (!url || !bearer) {
+            console.error("This job has no id-token permission, so there is no identity to present to npm.");
+            process.exit(1);
+          }
+          const tokenUrl = new URL(url);
+          tokenUrl.searchParams.append("audience", "npm:registry.npmjs.org");
+          const idRes = await fetch(tokenUrl, { headers: { Authorization: `Bearer ${bearer}` } });
+          const idToken = (await idRes.json()).value;
+          if (!idToken) {
+            console.error(`GitHub did not issue an identity token (HTTP ${idRes.status}).`);
+            process.exit(1);
+          }
+          const c = JSON.parse(Buffer.from(idToken.split(".")[1], "base64url").toString());
+          console.log("Identity presented to npm:");
+          console.log(`  repository:   ${c.repository}`);
+          console.log(`  workflow:     ${c.job_workflow_ref ?? c.workflow_ref}`);
+          console.log(`  environment:  ${c.environment ?? "(none)"}`);
+          console.log(`  ref, event:   ${c.ref}, ${c.event_name}`);
+          const name = JSON.parse((await import("node:fs")).readFileSync("package.json", "utf8")).name;
+          const ex = await fetch(
+            `https://registry.npmjs.org/-/npm/v1/oidc/token/exchange/package/${name.replace("/", "%2f")}`,
+            { method: "POST", headers: { Authorization: `Bearer ${idToken}` } }
+          );
+          const body = await ex.json().catch(() => ({}));
+          if (ex.ok && body.token) {
+            console.log(`npm accepts this job as a trusted publisher for ${name}.`);
+            process.exit(0);
+          }
+          console.error(`npm refused the exchange: HTTP ${ex.status}${body.message ? `, "${body.message}"` : ""}.`);
+          console.error(
+            `Compare the identity above with the trusted publisher on https://www.npmjs.com/package/${name}/access: ` +
+            "the repository, the workflow file name, and the environment must match exactly."
+          );
+          process.exit(1);
+          EOF
+
+      # Tested above, so scripts are skipped here rather than run twice.
+      # Verbose, so the log records how npm authenticated and whether it
+      # attached provenance.
       - name: Publish
-        run: npm publish --access public
+        run: npm publish --access public --ignore-scripts --loglevel verbose
 
   # The official MCP registry, authenticated the same tokenless way: the
   # registry accepts this repository's GitHub identity for the
