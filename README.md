@@ -71,6 +71,9 @@ Then fully restart your AI client and ask it:
 Eight checks, plain English results, and the exact fix for anything that
 is wrong.
 
+To update later, run `npx @orygn/omnicord@latest init` and choose
+**Re-register with your AI client**. Your bots and settings carry over.
+
 ## What it can do
 
 | Area | Examples |

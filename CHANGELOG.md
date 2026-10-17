@@ -4,7 +4,11 @@ All notable changes to Omnicord are recorded here. The format follows
 Keep a Changelog, and the project follows semantic versioning. Version
 1.0.0 marked the public launch; releases since follow semver.
 
-## Unreleased
+## 1.4.1 (2026-10-17)
+
+Repairs installs set up through npx, which stopped working whenever npm
+cleared its npx cache, gives existing setups a one-step way to re-register
+and update, and refreshes dependencies. No new tools.
 
 ### Fixed
 
@@ -36,6 +40,32 @@ Keep a Changelog, and the project follows semantic versioning. Version
 
 - The troubleshooting entry for this blamed `npm cache clean`, which does not
   touch the npx cache. It now names the symptom and the actual causes.
+- `@modelcontextprotocol/sdk` 1.32.1, `zod` 4.6.7, `discord-api-types`
+  0.38.56. The upgrade changed one thing in the published tool definitions:
+  the choice `value` in `register_app_command` and `update_app_command` is
+  now written as `"type": ["string", "number"]` instead of an `anyOf` of the
+  two, which means the same thing.
+
+### Security
+
+- Seven advisories against packages in the dependency tree are resolved:
+  `proxy-addr` (critical, IP spoofing through an IPv4-mapped IPv6 trust
+  subnet), `@modelcontextprotocol/sdk` (high, its OAuth client could send
+  credentials to an authorization server chosen by the MCP server),
+  `fast-uri` (high, several host confusion and request forgery issues),
+  `undici` (high, two denial of service issues in its WebSocket client and a
+  response splitting issue in its retry interceptor), and `hono`,
+  `ip-address`, and `qs` (moderate).
+
+  None were reachable from Omnicord. It imports no express, hono, or MCP
+  client or OAuth code; its HTTP transport is built on `node:http` and caps
+  request bodies at 1 MB after checking the bearer token; and `undici` serves
+  only REST requests. The gateway connection uses the `ws` package rather
+  than undici's WebSocket client, and nothing uses its retry interceptor.
+
+  Only the Docker image and source checkouts had these versions, since both
+  install from the lockfile. A fresh npm install of 1.4.0 already resolved
+  fixed versions of all seven. The 1.4.1 image is built on the fixed lockfile.
 
 ## 1.4.0 (2026-09-07)
 

@@ -63,12 +63,12 @@ bytes each:
 
 | Setting | Tools | Payload | Tokens | Saved |
 |---|---|---|---|---|
-| unset (everything) | 155 | 132,918 B | ~33,200 | |
-| `core` only | 14 | 10,019 B | ~2,500 | 92% |
-| `messaging` | 35 | 33,791 B | ~8,400 | 75% |
-| `builder` | 24 | 24,954 B | ~6,200 | 81% |
-| `messaging,moderation` | 52 | 48,892 B | ~12,200 | 63% |
-| `messaging,moderation,structure` | 75 | 68,153 B | ~17,000 | 49% |
+| unset (everything) | 155 | 132,938 B | ~33,200 | |
+| `core` only | 14 | 10,077 B | ~2,500 | 92% |
+| `messaging` | 35 | 33,849 B | ~8,500 | 75% |
+| `builder` | 24 | 25,012 B | ~6,300 | 81% |
+| `messaging,moderation` | 52 | 48,950 B | ~12,200 | 63% |
+| `messaging,moderation,structure` | 75 | 68,211 B | ~17,100 | 49% |
 
 ## Choosing a set
 
@@ -92,7 +92,7 @@ In stdio mode the startup line on stderr also names the active groups, so you
 can confirm what a session loaded:
 
 ```
-omnicord v1.4.0 on stdio (toolsets: core, messaging, moderation)
+omnicord v1.4.1 on stdio (toolsets: core, messaging, moderation)
 ```
 
 ## Adding a tool
